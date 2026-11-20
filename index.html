@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Линия Огня: Тактика</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0e1116;
+            --panel-bg: #171c24;
+            --card-bg: #1f2631;
+            --border-color: #2e3847;
+            --accent-gold: #f59e0b;
+            --accent-blue: #38bdf8;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+        }
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Верхняя панель ресурсов */
+        .top-bar {
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+            z-index: 10;
+        }
+        .res-pill {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 5px 8px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .res-top {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 800;
+            font-size: 13px;
+        }
+        .res-rate {
+            font-size: 10px;
+            color: var(--accent-green);
+            font-weight: 700;
+        }
+
+        /* Основная рабочая область */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            padding-bottom: 78px;
+        }
+        .screen {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: var(--accent-gold);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Визуальная панорама базы */
+        .base-visual {
+            background: linear-gradient(180deg, #1b2838 0%, #263529 65%, #1d2920 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 12px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            position: relative;
+            box-shadow: inset 0 0 25px rgba(0,0,0,0.6);
+        }
+        .b-plot {
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 8px 4px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.12s;
+        }
+        .b-plot:active { transform: scale(0.96); }
+        .b-plot.hq {
+            grid-column: span 3;
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(15, 23, 42, 0.85));
+            border-color: rgba(245, 158, 11, 0.45);
+        }
+        .b-icon { font-size: 24px; }
+        .b-plot-name { font-size: 11px; font-weight: 800; margin-top: 2px; }
+        .b-plot-lvl {
+            display: inline-block;
+            background: var(--accent-gold);
+            color: #000;
+            font-size: 10px;
+            font-weight: 900;
+            padding: 1px 6px;
+            border-radius: 6px;
+            margin-top: 3px;
+        }
+
+        /* Карточки зданий, юнитов и технологий */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .avatar {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            background: #11161f;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .card-name {
+            font-weight: 800;
+            font-size: 15px;
+        }
+        .card-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .lvl-badge {
+            background: #2b3544;
+            color: var(--accent-blue);
+            font-weight: 900;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+
+        /* Сетка характеристик */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            background: rgba(14, 17, 22, 0.55);
+            padding: 8px;
+            border-radius: 10px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-lbl { font-size: 10px; color: var(--text-muted); }
+        .stat-val { font-size: 12.5px; font-weight: 800; }
+
+        .skill-desc {
+            font-size: 12px;
+            background: rgba(56, 189, 248, 0.1);
+            border-left: 3px solid var(--accent-blue);
+            padding: 6px 8px;
+            border-radius: 4px;
+            color: #cbd5e1;
+        }
+
+        /* Кнопки прокачки */
+        .btn {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-weight: 800;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-upgrade {
+            background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
+            box-shadow: 0 3px 0 #14532d;
+        }
+        .btn-upgrade:disabled {
+            background: #2c3543;
+            color: #64748b;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        .btn-battle {
+            background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+            color: #fff;
+            font-size: 15px;
+            padding: 13px;
+            box-shadow: 0 4px 0 #7f1d1d;
+        }
+
+        /* Ветка технологий */
+        .tech-branch {
+            border-left: 3px solid var(--accent-gold);
+            padding-left: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tech-branch-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--accent-blue);
+        }
+
+        /* Экран боя */
+        .battle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+        #battle-canvas {
+            width: 100%;
+            height: 230px;
+            background: #131a15;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            display: block;
+        }
+        .skills-bar {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        .skill-btn {
+            background: #1e293b;
+            border: 1px solid var(--accent-blue);
+            color: #fff;
+            border-radius: 12px;
+            padding: 9px 8px;
+            text-align: left;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .skill-btn.ready {
+            background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+        }
+        .skill-btn:disabled {
+            opacity: 0.55;
+            border-color: #334155;
+            cursor: not-allowed;
+        }
+        .skill-btn-top {
+            font-size: 12px;
+            font-weight: 800;
+            display: flex;
+            justify-content: space-between;
+        }
+        .skill-btn-sub {
+            font-size: 10.5px;
+            color: #cbd5e1;
+            margin-top: 2px;
+        }
+
+        /* Нижняя навигация */
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            background: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            z-index: 20;
+        }
+        .nav-item {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .nav-item.active {
+            color: var(--accent-gold);
+            background: rgba(245, 158, 11, 0.08);
+        }
+        .nav-item.battle-tab {
+            color: var(--accent-red);
+        }
+        .nav-item.battle-tab.active {
+            background: rgba(239, 68, 68, 0.14);
+        }
+        .nav-icon { font-size: 20px; }
+
+        /* Модальное окно победы/поражения */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 16px;
+        }
+        .modal-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 20px;
+            width: 100%;
+            max-width: 340px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Верхняя панель ресурсов -->
+    <div class="top-bar">
+        <div class="res-pill">
+            <div class="res-top">⚙️ <span id="res-steel">0</span></div>
+            <div class="res-rate" id="rate-steel">+0/с</div>
+        </div>
+        <div class="res-pill">
+            <div class="res-top">🛢️ <span id="res-fuel">0</span></div>
+            <div class="res-rate" id="rate-fuel">+0/с</div>
+        </div>
+        <div class="res-pill">
+            <div class="res-top">🧪 <span id="res-science">0</span></div>
+            <div class="res-rate" style="color: var(--accent-blue);">Наука</div>
+        </div>
+    </div>
+
+    <div class="content">
+        <!-- ЭКРАН 1: БАЗА -->
+        <div id="screen-base" class="screen active">
+            <div class="section-title">
+                <span>Военная база</span>
+                <span style="font-size: 12px; color: var(--text-muted);" id="base-power">Мощь: 0</span>
+            </div>
+
+            <div class="base-visual" id="base-visual"></div>
+            <div id="buildings-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+
+        <!-- ЭКРАН 2: ОТРЯД И ТАНК -->
+        <div id="screen-squad" class="screen">
+            <div class="section-title">
+                <span>Отряд и Бронетехника</span>
+            </div>
+            <div id="units-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+
+        <!-- ЭКРАН 3: ВЕТКА ТЕХНОЛОГИЙ -->
+        <div id="screen-tech" class="screen">
+            <div class="section-title">
+                <span>Ветка прокачки</span>
+                <span style="font-size: 12px; color: var(--accent-blue);">За 🧪 и ⚙️</span>
+            </div>
+            <div id="tech-list" style="display: flex; flex-direction: column; gap: 14px;"></div>
+        </div>
+
+        <!-- ЭКРАН 4: БОЙ -->
+        <div id="screen-battle" class="screen">
+            <div class="battle-header">
+                <div>
+                    <div style="font-weight: 900; font-size: 15px;" id="mission-title">Миссия 1: Аванпост</div>
+                    <div style="font-size: 12px; color: var(--text-muted);" id="mission-reward">Награда: ⚙️ 150 | 🛢️ 80 | 🧪 25</div>
+                </div>
+                <button class="btn btn-battle" style="padding: 8px 14px; font-size: 13px;" id="btn-start-battle" onclick="startBattle()">В АТАКУ</button>
+            </div>
+
+            <canvas id="battle-canvas"></canvas>
+
+            <div style="font-size: 12px; color: var(--text-muted); text-align: center;" id="battle-status">
+                Нажми «В АТАКУ», чтобы начать штурм сектора
+            </div>
+
+            <div class="skills-bar" id="skills-bar"></div>
+        </div>
+    </div>
+
+    <!-- Нижнее меню -->
+    <div class="nav-bar">
+        <button class="nav-item active" onclick="switchTab('base', this)">
+            <span class="nav-icon">🏭</span>
+            <span>База</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('squad', this)">
+            <span class="nav-icon">🎖️</span>
+            <span>Отряд и Танк</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('tech', this)">
+            <span class="nav-icon">🧬</span>
+            <span>Ветка умений</span>
+        </button>
+        <button class="nav-item battle-tab" onclick="switchTab('battle', this)">
+            <span class="nav-icon">⚔️</span>
+            <span>В бой</span>
+        </button>
+    </div>
+
+    <!-- Окно результата боя -->
+    <div class="modal-overlay" id="battle-modal">
+        <div class="modal-box">
+            <div style="font-size: 40px;" id="modal-icon">🏆</div>
+            <h2 style="margin: 0;" id="modal-title">Победа!</h2>
+            <p style="margin: 0; font-size: 13px; color: var(--text-muted);" id="modal-desc"></p>
+            <button class="btn btn-upgrade" onclick="closeBattleModal()">Забрать награду</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.expand();
+            tg.ready();
+        }
+
+        /* ================= ДАННЫЕ И БАЛАНС ИГРЫ ================= */
+        const defaultState = {
+            steel: 250,
+            fuel: 120,
+            science: 40,
+            mission: 1,
+            lastTick: Date.now(),
+            buildings: {
+                hq: 1,
+                steelMill: 1,
+                oilRig: 1,
+                barracks: 1,
+                tankFactory: 1
+            },
+            units: {
+                assault: 1,
+                sniper: 1,
+                grenadier: 1,
+                tank: 1
+            },
+            tech: {
+                dmg1: 0, dmg2: 0, dmg3: 0,
+                hp1: 0,  hp2: 0,  hp3: 0,
+                eco1: 0, eco2: 0, eco3: 0
+            }
+        };
+
+        let state = JSON.parse(JSON.stringify(defaultState));
+        try {
+            const saved = JSON.parse(localStorage.getItem('lof_save_v1'));
+            if (saved) {
+                state = {
+                    ...defaultState,
+                    ...saved,
+                    buildings: { ...defaultState.buildings, ...(saved.buildings || {}) },
+                    units: { ...defaultState.units, ...(saved.units || {}) },
+                    tech: { ...defaultState.tech, ...(saved.tech || {}) }
+                };
+            }
+        } catch (e) {}
+
+        function saveGame() {
+            state.lastTick = Date.now();
+            try {
+                localStorage.setItem('lof_save_v1', JSON.stringify(state));
+            } catch (e) {}
+        }
+
+        const buildingsConfig = [
+            {
+                id: 'hq', name: 'Штаб командования', icon: '🏛️', isHq: true,
+                desc: 'Определяет макс. уровень всех построек и юнитов',
+                statLabel: (lvl) => `Лимит ур. зданий: ${lvl}`,
+                cost: (lvl) => ({ steel: Math.floor(150 * Math.pow(1.65, lvl - 1)), fuel: Math.floor(70 * Math.pow(1.6, lvl - 1)) })
+            },
+            {
+                id: 'steelMill', name: 'Завод стали', icon: '🏭',
+                desc: 'Основной строительный материал базы',
+                statLabel: (lvl) => `Добыча: +${getSteelRate(lvl).toFixed(1)}/с`,
+                cost: (lvl) => ({ steel: Math.floor(80 * Math.pow(1.45, lvl - 1)), fuel: Math.floor(30 * Math.pow(1.4, lvl - 1)) })
+            },
+            {
+                id: 'oilRig', name: 'Нефтевышка', icon: '🛢️',
+                desc: 'Добывает топливо для техники и науки',
+                statLabel: (lvl) => `Добыча: +${getFuelRate(lvl).toFixed(1)}/с`,
+                cost: (lvl) => ({ steel: Math.floor(90 * Math.pow(1.45, lvl - 1)), fuel: Math.floor(25 * Math.pow(1.4, lvl - 1)) })
+            },
+            {
+                id: 'barracks', name: 'Казармы пехоты', icon: '⛺',
+                desc: 'Повышает здоровье всех бойцов отряда',
+                statLabel: (lvl) => `Бонус HP пехоты: +${(lvl - 1) * 8}%`,
+                cost: (lvl) => ({ steel: Math.floor(110 * Math.pow(1.5, lvl - 1)), fuel: Math.floor(45 * Math.pow(1.45, lvl - 1)) })
+            },
+            {
+                id: 'tankFactory', name: 'Танковый завод', icon: '🚜',
+                desc: 'Усиливает урон и броню бронетехники',
+                statLabel: (lvl) => `Урон танка: +${(lvl - 1) * 10}%`,
+                cost: (lvl) => ({ steel: Math.floor(140 * Math.pow(1.55, lvl - 1)), fuel: Math.floor(80 * Math.pow(1.5, lvl - 1)) })
+            }
+        ];
+
+        const unitsConfig = [
+            {
+                id: 'assault', name: 'Штурмовик', role: 'Пехота • Передовая', icon: '🪖', isTank: false,
+                baseHp: 140, baseDmg: 18, baseArmor: 4, crit: 12,
+                skillName: 'Шквальный огонь', skillCd: 7,
+                skillDesc: 'Выпускает очередь по ближайшему врагу (220% урона).',
+                cost: (lvl) => ({ steel: Math.floor(70 * Math.pow(1.42, lvl - 1)), fuel: Math.floor(25 * Math.pow(1.38, lvl - 1)) })
+            },
+            {
+                id: 'sniper', name: 'Снайпер', role: 'Пехота • Дальний бой', icon: '🎯', isTank: false,
+                baseHp: 90, baseDmg: 34, baseArmor: 1, crit: 28,
+                skillName: 'Бронебойный выстрел', skillCd: 9,
+                skillDesc: 'Выстрел в уязвимую точку (300% урона, игнорирует броню).',
+                cost: (lvl) => ({ steel: Math.floor(85 * Math.pow(1.44, lvl - 1)), fuel: Math.floor(35 * Math.pow(1.4, lvl - 1)) })
+            },
+            {
+                id: 'grenadier', name: 'Гранатомётчик', role: 'Пехота • Поддержка', icon: '🚀', isTank: false,
+                baseHp: 115, baseDmg: 25, baseArmor: 3, crit: 10,
+                skillName: 'Залп РПГ', skillCd: 10,
+                skillDesc: 'Накрывает взрывом всех врагов на поле (140% урона по площади).',
+                cost: (lvl) => ({ steel: Math.floor(95 * Math.pow(1.45, lvl - 1)), fuel: Math.floor(45 * Math.pow(1.42, lvl - 1)) })
+            },
+            {
+                id: 'tank', name: 'Танк Т-90 «Титан»', role: 'Тяжёлая бронетехника', icon: '🛡️', isTank: true,
+                baseHp: 460, baseDmg: 48, baseArmor: 16, crit: 15,
+                skillName: 'Фугасный снаряд', skillCd: 11,
+                skillDesc: 'Мощный залп из 125-мм пушки по всем врагам (190% урона).',
+                cost: (lvl) => ({ steel: Math.floor(160 * Math.pow(1.52, lvl - 1)), fuel: Math.floor(110 * Math.pow(1.48, lvl - 1)) })
+            }
+        ];
+
+        const techBranches = [
+            {
+                title: '🔥 Ветка 1: Огневая мощь',
+                nodes: [
+                    { id: 'dmg1', name: 'Калибр 7.62', max: 5, req: null, desc: '+6% к урону пехоты за уровень', sci: 15, steel: 60 },
+                    { id: 'dmg2', name: 'Кумулятивные снаряды', max: 5, req: 'dmg1', desc: '+8% к урону танка за уровень', sci: 30, steel: 130 },
+                    { id: 'dmg3', name: 'Тактический прицел', max: 3, req: 'dmg2', desc: '+5% к шансу крита всего отряда', sci: 55, steel: 240 }
+                ]
+            },
+            {
+                title: '🛡️ Ветка 2: Броня и живучесть',
+                nodes: [
+                    { id: 'hp1', name: 'Кевларовые жилеты', max: 5, req: null, desc: '+7% к HP пехоты за уровень', sci: 15, steel: 60 },
+                    { id: 'hp2', name: 'Динамическая защита', max: 5, req: 'hp1', desc: '+10% к HP и +3 к броне танка', sci: 30, steel: 140 },
+                    { id: 'hp3', name: 'Полевой госпиталь', max: 3, req: 'hp2', desc: 'Восстанавливает 8% HP в бою каждые 8 сек', sci: 60, steel: 260 }
+                ]
+            },
+            {
+                title: '⚡ Ветка 3: Экономика и тактика',
+                nodes: [
+                    { id: 'eco1', name: 'Автоматизация цехов', max: 5, req: null, desc: '+10% к добыче Стали и Топлива', sci: 15, steel: 50 },
+                    { id: 'eco2', name: 'Ускоренная перезарядка', max: 4, req: 'eco1', desc: '-6% времени перезарядки умений', sci: 35, steel: 150 },
+                    { id: 'eco3', name: 'Трофейная разведка', max: 3, req: 'eco2', desc: '+15% ресурсов и науки за победу в бою', sci: 65, steel: 280 }
+                ]
+            }
+        ];
+
+        /* ================= РАСЧЁТ ХАРАКТЕРИСТИК ================= */
+        function getSteelRate(lvl = state.buildings.steelMill) {
+            const ecoBonus = 1 + state.tech.eco1 * 0.10;
+            return (2.5 + (lvl - 1) * 2.2) * ecoBonus;
+        }
+
+        function getFuelRate(lvl = state.buildings.oilRig) {
+            const ecoBonus = 1 + state.tech.eco1 * 0.10;
+            return (1.4 + (lvl - 1) * 1.3) * ecoBonus;
+        }
+
+        function getUnitStats(uCfg) {
+            const lvl = state.units[uCfg.id];
+            const scale = Math.pow(1.22, lvl - 1);
+
+            let hp = uCfg.baseHp * scale;
+            let dmg = uCfg.baseDmg * scale;
+            let armor = Math.floor(uCfg.baseArmor + (lvl - 1) * (uCfg.isTank ? 3 : 1));
+            let crit = uCfg.crit + state.tech.dmg3 * 5;
+
+            if (uCfg.isTank) {
+                hp *= (1 + state.tech.hp2 * 0.10);
+                dmg *= (1 + (state.buildings.tankFactory - 1) * 0.10 + state.tech.dmg2 * 0.08);
+                armor += state.tech.hp2 * 3;
+            } else {
+                hp *= (1 + (state.buildings.barracks - 1) * 0.08 + state.tech.hp1 * 0.07);
+                dmg *= (1 + state.tech.dmg1 * 0.06);
+            }
+
+            const cdMult = Math.max(0.5, 1 - state.tech.eco2 * 0.06);
+            return {
+                lvl,
+                hp: Math.round(hp),
+                dmg: Math.round(dmg),
+                armor,
+                crit,
+                cd: +(uCfg.skillCd * cdMult).toFixed(1)
+            };
+        }
+
+        function getTotalPower() {
+            let power = 0;
+            unitsConfig.forEach(u => {
+                const s = getUnitStats(u);
+                power += s.hp * 0.5 + s.dmg * 4 + s.armor * 10;
+            });
+            return Math.round(power);
+        }
+
+        // Оффлайн-добыча ресурсов за время отсутствия
+        const offlineSec = Math.min(3600 * 4, Math.max(0, (Date.now() - state.lastTick) / 1000));
+        if (offlineSec > 5) {
+            state.steel += getSteelRate() * offlineSec;
+            state.fuel += getFuelRate() * offlineSec;
+        }
+
+        /* ================= РЕНДЕР ИНТЕРФЕЙСА ================= */
+        function updateTopBar() {
+            document.getElementById('res-steel').textContent = Math.floor(state.steel);
+            document.getElementById('res-fuel').textContent = Math.floor(state.fuel);
+            document.getElementById('res-science').textContent = Math.floor(state.science);
+            document.getElementById('rate-steel').textContent = `+${getSteelRate().toFixed(1)}/с`;
+            document.getElementById('rate-fuel').textContent = `+${getFuelRate().toFixed(1)}/с`;
+            document.getElementById('base-power').textContent = `Боевая мощь: ${getTotalPower()}`;
+        }
+
+        function renderBase() {
+            const visualEl = document.getElementById('base-visual');
+            const listEl = document.getElementById('buildings-list');
+            visualEl.innerHTML = '';
+            listEl.innerHTML = '';
+
+            buildingsConfig.forEach(b => {
+                const lvl = state.buildings[b.id];
+                const cost = b.cost(lvl);
+                const hqLimit = !b.isHq && lvl >= state.buildings.hq;
+                const canAfford = state.steel >= cost.steel && state.fuel >= cost.fuel && !hqLimit;
+
+                // Мини-карта базы сверху
+                const plot = document.createElement('div');
+                plot.className = `b-plot ${b.isHq ? 'hq' : ''}`;
+                plot.innerHTML = `
+                    <div class="b-icon">${b.icon}</div>
+                    <div class="b-plot-name">${b.name}</div>
+                    <div class="b-plot-lvl">Ур. ${lvl}</div>
+                `;
+                plot.onclick = () => {
+                    document.getElementById(`b-card-${b.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                };
+                visualEl.appendChild(plot);
+
+                // Карточка улучшения здания
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.id = `b-card-${b.id}`;
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="card-info">
+                            <div class="avatar">${b.icon}</div>
+                            <div>
+                                <div class="card-name">${b.name}</div>
+                                <div class="card-sub">${b.desc}</div>
+                                <div style="font-size:12px; color:var(--accent-green); font-weight:700; margin-top:2px;">${b.statLabel(lvl)}</div>
+                            </div>
+                        </div>
+                        <div class="lvl-badge">Ур. ${lvl}</div>
+                    </div>
+                    <button class="btn btn-upgrade" ${canAfford ? '' : 'disabled'} onclick="upgradeBuilding('${b.id}')">
+                        ${hqLimit ? `Требуется Штаб Ур. ${lvl + 1}` : `Улучшить: ⚙️ ${cost.steel} | 🛢️ ${cost.fuel}`}
+                    </button>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        function upgradeBuilding(id) {
+            const cfg = buildingsConfig.find(b => b.id === id);
+            const lvl = state.buildings[id];
+            if (!cfg.isHq && lvl >= state.buildings.hq) return;
+            const cost = cfg.cost(lvl);
+            if (state.steel >= cost.steel && state.fuel >= cost.fuel) {
+                state.steel -= cost.steel;
+                state.fuel -= cost.fuel;
+                state.buildings[id]++;
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                saveGame();
+                refreshAll();
+            }
+        }
+
+        function renderSquad() {
+            const listEl = document.getElementById('units-list');
+            listEl.innerHTML = '';
+
+            unitsConfig.forEach(u => {
+                const s = getUnitStats(u);
+                const cost = u.cost(s.lvl);
+                const hqLimit = s.lvl >= state.buildings.hq * 2;
+                const canAfford = state.steel >= cost.steel && state.fuel >= cost.fuel && !hqLimit;
+
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="card-info">
+                            <div class="avatar">${u.icon}</div>
+                            <div>
+                                <div class="card-name">${u.name}</div>
+                                <div class="card-sub">${u.role}</div>
+                            </div>
+                        </div>
+                        <div class="lvl-badge">Ур. ${s.lvl}</div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><div class="stat-lbl">❤️ HP</div><div class="stat-val">${s.hp}</div></div>
+                        <div class="stat-item"><div class="stat-lbl">⚔️ УРОН</div><div class="stat-val">${s.dmg}</div></div>
+                        <div class="stat-item"><div class="stat-lbl">🛡️ БРОНЯ</div><div class="stat-val">${s.armor}</div></div>
+                        <div class="stat-item"><div class="stat-lbl">💥 КРИТ</div><div class="stat-val">${s.crit}%</div></div>
+                    </div>
+                    <div class="skill-desc">
+                        <b>Умение «${u.skillName}» (${s.cd}с):</b> ${u.skillDesc}
+                    </div>
+                    <button class="btn btn-upgrade" ${canAfford ? '' : 'disabled'} onclick="upgradeUnit('${u.id}')">
+                        ${hqLimit ? `Повысьте Штаб для прокачки` : `Повысить уровень: ⚙️ ${cost.steel} | 🛢️ ${cost.fuel}`}
+                    </button>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        function upgradeUnit(id) {
+            const cfg = unitsConfig.find(u => u.id === id);
+            const lvl = state.units[id];
+            if (lvl >= state.buildings.hq * 2) return;
+            const cost = cfg.cost(lvl);
+            if (state.steel >= cost.steel && state.fuel >= cost.fuel) {
+                state.steel -= cost.steel;
+                state.fuel -= cost.fuel;
+                state.units[id]++;
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                saveGame();
+                refreshAll();
+            }
+        }
+
+        function renderTech() {
+            const listEl = document.getElementById('tech-list');
+            listEl.innerHTML = '';
+
+            techBranches.forEach(branch => {
+                const branchDiv = document.createElement('div');
+                branchDiv.className = 'tech-branch';
+                branchDiv.innerHTML = `<div class="tech-branch-title">${branch.title}</div>`;
+
+                branch.nodes.forEach(node => {
+                    const lvl = state.tech[node.id];
+                    const unlocked = !node.req || state.tech[node.req] >= 1;
+                    const isMax = lvl >= node.max;
+                    const sciCost = Math.floor(node.sci * Math.pow(1.5, lvl));
+                    const steelCost = Math.floor(node.steel * Math.pow(1.5, lvl));
+                    const canBuy = unlocked && !isMax && state.science >= sciCost && state.steel >= steelCost;
+
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.style.opacity = unlocked ? '1' : '0.55';
+                    card.innerHTML = `
+                        <div class="card-header">
+                            <div>
+                                <div class="card-name">${node.name}</div>
+                                <div class="card-sub">${node.desc}</div>
+                            </div>
+                            <div class="lvl-badge">${lvl} / ${node.max}</div>
+                        </div>
+                        <button class="btn btn-upgrade" ${canBuy ? '' : 'disabled'} onclick="upgradeTech('${node.id}', ${sciCost}, ${steelCost})">
+                            ${!unlocked ? '🔒 Изучите предыдущий навык' : (isMax ? '✅ Максимальный уровень' : `Изучить: 🧪 ${sciCost} | ⚙️ ${steelCost}`)}
+                        </button>
+                    `;
+                    branchDiv.appendChild(card);
+                });
+
+                listEl.appendChild(branchDiv);
+            });
+        }
+
+        function upgradeTech(id, sciCost, steelCost) {
+            if (state.science >= sciCost && state.steel >= steelCost) {
+                state.science -= sciCost;
+                state.steel -= steelCost;
+                state.tech[id]++;
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+                saveGame();
+                refreshAll();
+            }
+        }
+
+        function switchTab(tab, btnEl) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(`screen-${tab}`).classList.add('active');
+            btnEl.classList.add('active');
+            if (tab === 'battle') updateMissionHeader();
+        }
+
+        function getMissionRewards(m) {
+            const mult = 1 + state.tech.eco3 * 0.15;
+            return {
+                steel: Math.round((130 + m * 55) * mult),
+                fuel: Math.round((65 + m * 30) * mult),
+                science: Math.round((20 + m * 10) * mult)
+            };
+        }
+
+        function updateMissionHeader() {
+            const m = state.mission;
+            const rew = getMissionRewards(m);
+            document.getElementById('mission-title').textContent = `Миссия ${m}: Рубеж обороны`;
+            document.getElementById('mission-reward').textContent = `Награда: ⚙️ ${rew.steel} | 🛢️ ${rew.fuel} | 🧪 ${rew.science}`;
+            renderSkillButtons();
+        }
+
+        /* ================= ТАКТИЧЕСКИЙ БОЙ НА CANVAS ================= */
+        const bCanvas = document.getElementById('battle-canvas');
+        const bCtx = bCanvas.getContext('2d');
+        let battleActive = false;
+        let allies = [];
+        let enemies = [];
+        let projectiles = [];
+        let explosions = [];
+        let floatingTexts = [];
+        let healTimer = 0;
+
+        function resizeBattleCanvas() {
+            bCanvas.width = bCanvas.clientWidth || 340;
+            bCanvas.height = 230;
+        }
+        window.addEventListener('resize', resizeBattleCanvas);
+        resizeBattleCanvas();
+
+        function startBattle() {
+            if (battleActive) return;
+            resizeBattleCanvas();
+            battleActive = true;
+            document.getElementById('btn-start-battle').disabled = true;
+            document.getElementById('battle-status').textContent = 'Идёт бой! Прожимайте умения бойцов и танка';
+            projectiles = [];
+            explosions = [];
+            floatingTexts = [];
+            healTimer = 0;
+
+            const w = bCanvas.width;
+            const h = bCanvas.height;
+
+            // Формируем отряд игрока слева
+            const allyPositions = [
+                { x: w * 0.24, y: h * 0.25 }, // Штурмовик
+                { x: w * 0.14, y: h * 0.45 }, // Снайпер
+                { x: w * 0.16, y: h * 0.72 }, // Гранатомётчик
+                { x: w * 0.30, y: h * 0.62 }  // Танк
+            ];
+
+            allies = unitsConfig.map((u, idx) => {
+                const st = getUnitStats(u);
+                return {
+                    id: u.id,
+                    name: u.name,
+                    icon: u.icon,
+                    isTank: u.isTank,
+                    x: allyPositions[idx].x,
+                    y: allyPositions[idx].y,
+                    hp: st.hp,
+                    maxHp: st.hp,
+                    dmg: st.dmg,
+                    armor: st.armor,
+                    crit: st.crit,
+                    atkTimer: 0.6 + idx * 0.35,
+                    atkInterval: u.isTank ? 2.1 : 1.35,
+                    skillName: u.skillName,
+                    skillCd: st.cd,
+                    skillTimer: st.cd * 0.35 // в начале боя умения заряжены на 65%
+                };
+            });
+
+            // Формируем врагов справа под номер миссии
+            const m = state.mission;
+            const scale = Math.pow(1.25, m - 1);
+            enemies = [
+                { name: 'Пехотинец', icon: '🔫', isTank: false, x: w * 0.76, y: h * 0.25, hp: Math.round(130 * scale), maxHp: Math.round(130 * scale), dmg: Math.round(15 * scale), armor: Math.floor(2 + m), atkTimer: 0.9, atkInterval: 1.45 },
+                { name: 'Пулемётчик', icon: '💣', isTank: false, x: w * 0.84, y: h * 0.48, hp: Math.round(170 * scale), maxHp: Math.round(170 * scale), dmg: Math.round(20 * scale), armor: Math.floor(4 + m), atkTimer: 1.2, atkInterval: 1.6 },
+                { name: 'Бронемашина', icon: '🚙', isTank: true, x: w * 0.73, y: h * 0.72, hp: Math.round(320 * scale), maxHp: Math.round(320 * scale), dmg: Math.round(30 * scale), armor: Math.floor(8 + m * 1.5), atkTimer: 1.5, atkInterval: 2.1 }
+            ];
+
+            renderSkillButtons();
+        }
+
+        function renderSkillButtons() {
+            const bar = document.getElementById('skills-bar');
+            bar.innerHTML = '';
+
+            unitsConfig.forEach((u, idx) => {
+                const ally = battleActive ? allies[idx] : null;
+                const alive = ally ? ally.hp > 0 : true;
+                const ready = battleActive && alive && ally.skillTimer <= 0;
+                const cdLeft = ally ? Math.max(0, ally.skillTimer).toFixed(1) : getUnitStats(u).cd;
+
+                const btn = document.createElement('button');
+                btn.className = `skill-btn ${ready ? 'ready' : ''}`;
+                btn.disabled = !ready;
+                btn.innerHTML = `
+                    <div class="skill-btn-top">
+                        <span>${u.icon} ${u.skillName}</span>
+                        <span>${!alive ? '💀' : (ready ? 'ГОТОВО' : cdLeft + 'с')}</span>
+                    </div>
+                    <div class="skill-btn-sub">${u.name}</div>
+                `;
+                btn.onclick = () => triggerSkill(idx);
+                bar.appendChild(btn);
+            });
+        }
+
+        function triggerSkill(idx) {
+            if (!battleActive) return;
+            const ally = allies[idx];
+            if (!ally || ally.hp <= 0 || ally.skillTimer > 0) return;
+
+            const livingEnemies = enemies.filter(e => e.hp > 0);
+            if (livingEnemies.length === 0) return;
+
+            ally.skillTimer = ally.skillCd;
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+
+            if (ally.id === 'assault') {
+                const target = livingEnemies[0];
+                dealDamage(ally, target, ally.dmg * 2.2, false, '#38bdf8');
+            } else if (ally.id === 'sniper') {
+                const target = livingEnemies[livingEnemies.length - 1];
+                dealDamage(ally, target, ally.dmg * 3.0, true, '#f59e0b');
+            } else if (ally.id === 'grenadier') {
+                livingEnemies.forEach(t => dealDamage(ally, t, ally.dmg * 1.4, false, '#22c55e'));
+            } else if (ally.id === 'tank') {
+                livingEnemies.forEach(t => dealDamage(ally, t, ally.dmg * 1.9, false, '#ef4444'));
+            }
+            renderSkillButtons();
+        }
+
+        function dealDamage(attacker, target, rawDmg, ignoreArmor = false, color = '#fbbf24') {
+            if (target.hp <= 0) return;
+            const isCrit = attacker.crit && Math.random() * 100 < attacker.crit;
+            let dmg = rawDmg * (isCrit ? 1.5 : 1);
+            if (!ignoreArmor) {
+                dmg = Math.max(dmg * 0.25, dmg - target.armor);
+            }
+            const finalDmg = Math.round(dmg);
+            target.hp = Math.max(0, target.hp - finalDmg);
+
+            projectiles.push({
+                x: attacker.x, y: attacker.y,
+                tx: target.x, ty: target.y,
+                progress: 0,
+                color: color,
+                big: attacker.isTank
+            });
+
+            floatingTexts.push({
+                x: target.x + (Math.random() - 0.5) * 16,
+                y: target.y - 18,
+                text: `${isCrit ? '💥' : ''}-${finalDmg}`,
+                color: isCrit ? '#f59e0b' : '#ffffff',
+                life: 1.0
+            });
+        }
+
+        function finishBattle(victory) {
+            battleActive = false;
+            document.getElementById('btn-start-battle').disabled = false;
+            const modal = document.getElementById('battle-modal');
+
+            if (victory) {
+                const rew = getMissionRewards(state.mission);
+                state.steel += rew.steel;
+                state.fuel += rew.fuel;
+                state.science += rew.science;
+                state.mission++;
+                document.getElementById('modal-icon').textContent = '🏆';
+                document.getElementById('modal-title').textContent = 'Сектор захвачен!';
+                document.getElementById('modal-desc').textContent = `Трофеи: ⚙️ +${rew.steel}, 🛢️ +${rew.fuel}, 🧪 +${rew.science}`;
+                document.getElementById('battle-status').textContent = 'Победа! Готово к следующему штурму';
+                if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                document.getElementById('modal-icon').textContent = '💥';
+                document.getElementById('modal-title').textContent = 'Отряд отступил';
+                document.getElementById('modal-desc').textContent = 'Улучшите бойцов, танк или ветку умений на базе и повторите атаку.';
+                document.getElementById('battle-status').textContent = 'Требуется усиление отряда';
+                if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+            }
+
+            saveGame();
+            refreshAll();
+            modal.style.display = 'flex';
+        }
+
+        function closeBattleModal() {
+            document.getElementById('battle-modal').style.display = 'none';
+        }
+
+        /* ================= ИГРОВОЙ ЦИКЛ (РЕСУРСЫ + АНИМАЦИЯ БОЯ) ================= */
+        let lastTime = performance.now();
+        let saveCounter = 0;
+
+        function gameLoop(now) {
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            // Пассивный прирост ресурсов
+            state.steel += getSteelRate() * dt;
+            state.fuel += getFuelRate() * dt;
+            updateTopBar();
+
+            saveCounter += dt;
+            if (saveCounter >= 5) {
+                saveCounter = 0;
+                saveGame();
+            }
+
+            // Логика и отрисовка поля боя
+            drawBattleScene(dt);
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawBattleScene(dt) {
+            const w = bCanvas.width;
+            const h = bCanvas.height;
+
+            // Фон поля боя (тактическая земля и окопы)
+            bCtx.fillStyle = '#18211b';
+            bCtx.fillRect(0, 0, w, h);
+
+            bCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+            bCtx.lineWidth = 1;
+            for (let gx = 0; gx < w; gx += 32) {
+                bCtx.beginPath(); bCtx.moveTo(gx, 0); bCtx.lineTo(gx, h); bCtx.stroke();
+            }
+            for (let gy = 0; gy < h; gy += 32) {
+                bCtx.beginPath(); bCtx.moveTo(0, gy); bCtx.lineTo(w, gy); bCtx.stroke();
+            }
+
+            // Линия фронта по центру
+            bCtx.strokeStyle = 'rgba(239, 68, 68, 0.28)';
+            bCtx.setLineDash([6, 6]);
+            bCtx.beginPath();
+            bCtx.moveTo(w * 0.5, 10);
+            bCtx.lineTo(w * 0.5, h - 10);
+            bCtx.stroke();
+            bCtx.setLineDash([]);
+
+            if (battleActive) {
+                // Полевой госпиталь из ветки науки
+                if (state.tech.hp3 > 0) {
+                    healTimer += dt;
+                    if (healTimer >= 8) {
+                        healTimer = 0;
+                        allies.forEach(a => {
+                            if (a.hp > 0) {
+                                const heal = Math.round(a.maxHp * 0.08 * state.tech.hp3);
+                                a.hp = Math.min(a.maxHp, a.hp + heal);
+                                floatingTexts.push({ x: a.x, y: a.y - 20, text: `+${heal}`, color: '#22c55e', life: 1.0 });
+                            }
+                        });
+                    }
+                }
+
+                // Ходы союзников
+                let skillBarNeedsUpdate = false;
+                allies.forEach(a => {
+                    if (a.hp <= 0) return;
+                    if (a.skillTimer > 0) {
+                        a.skillTimer = Math.max(0, a.skillTimer - dt);
+                        skillBarNeedsUpdate = true;
+                    }
+                    a.atkTimer -= dt;
+                    if (a.atkTimer <= 0) {
+                        a.atkTimer = a.atkInterval;
+                        const target = enemies.find(e => e.hp > 0);
+                        if (target) dealDamage(a, target, a.dmg, false, a.isTank ? '#f59e0b' : '#38bdf8');
+                    }
+                });
+                if (skillBarNeedsUpdate) renderSkillButtons();
+
+                // Ходы врагов
+                enemies.forEach(e => {
+                    if (e.hp <= 0) return;
+                    e.atkTimer -= dt;
+                    if (e.atkTimer <= 0) {
+                        e.atkTimer = e.atkInterval;
+                        const livingAllies = allies.filter(a => a.hp > 0);
+                        if (livingAllies.length > 0) {
+                            // Танк притягивает больше внимания врагов
+                            const tank = livingAllies.find(a => a.isTank);
+                            const target = (tank && Math.random() < 0.55) ? tank : livingAllies[Math.floor(Math.random() * livingAllies.length)];
+                            dealDamage(e, target, e.dmg, false, '#ef4444');
+                        }
+                    }
+                });
+
+                // Проверка окончания боя
+                if (enemies.every(e => e.hp <= 0)) {
+                    finishBattle(true);
+                } else if (allies.every(a => a.hp <= 0)) {
+                    finishBattle(false);
+                }
+            }
+
+            // Отрисовка юнитов
+            const drawUnit = (u, isAlly) => {
+                if (u.hp <= 0) return;
+                // Подставка под юнитом
+                bCtx.fillStyle = isAlly ? 'rgba(56, 189, 248, 0.25)' : 'rgba(239, 68, 68, 0.25)';
+                bCtx.beginPath();
+                bCtx.ellipse(u.x, u.y + 14, u.isTank ? 24 : 16, 7, 0, 0, Math.PI * 2);
+                bCtx.fill();
+
+                // Иконка бойца/танка
+                bCtx.font = u.isTank ? '28px Arial' : '22px Arial';
+                bCtx.textAlign = 'center';
+                bCtx.textBaseline = 'middle';
+                bCtx.fillText(u.icon, u.x, u.y);
+
+                // Полоска HP
+                const barW = u.isTank ? 44 : 32;
+                const barH = 5;
+                const pct = Math.max(0, u.hp / u.maxHp);
+                bCtx.fillStyle = '#0f172a';
+                bCtx.fillRect(u.x - barW / 2, u.y - 22, barW, barH);
+                bCtx.fillStyle = isAlly ? '#22c55e' : '#ef4444';
+                bCtx.fillRect(u.x - barW / 2, u.y - 22, barW * pct, barH);
+            };
+
+            if (allies.length === 0) {
+                // Превью отряда до начала атаки
+                unitsConfig.forEach((u, i) => {
+                    drawUnit({ icon: u.icon, isTank: u.isTank, x: w * (i === 3 ? 0.3 : 0.18), y: 45 + i * 46, hp: 1, maxHp: 1 }, true);
+                });
+            } else {
+                allies.forEach(a => drawUnit(a, true));
+                enemies.forEach(e => drawUnit(e, false));
+            }
+
+            // Отрисовка снарядов и трассеров
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.progress += dt * 5.5;
+                if (p.progress >= 1) {
+                    explosions.push({ x: p.tx, y: p.ty, r: p.big ? 22 : 12, life: 1.0, color: p.color });
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+                const cx = p.x + (p.tx - p.x) * p.progress;
+                const cy = p.y + (p.ty - p.y) * p.progress;
+                bCtx.fillStyle = p.color;
+                bCtx.beginPath();
+                bCtx.arc(cx, cy, p.big ? 5 : 3, 0, Math.PI * 2);
+                bCtx.fill();
+            }
+
+            // Отрисовка взрывов
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const ex = explosions[i];
+                ex.life -= dt * 3.5;
+                if (ex.life <= 0) {
+                    explosions.splice(i, 1);
+                    continue;
+                }
+                bCtx.globalAlpha = ex.life;
+                bCtx.fillStyle = ex.color;
+                bCtx.beginPath();
+                bCtx.arc(ex.x, ex.y, ex.r * (1.3 - ex.life * 0.5), 0, Math.PI * 2);
+                bCtx.fill();
+                bCtx.globalAlpha = 1;
+            }
+
+            // Всплывающий урон
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const ft = floatingTexts[i];
+                ft.y -= dt * 26;
+                ft.life -= dt * 1.2;
+                if (ft.life <= 0) {
+                    floatingTexts.splice(i, 1);
+                    continue;
+                }
+                bCtx.globalAlpha = ft.life;
+                bCtx.font = 'bold 12px Segoe UI';
+                bCtx.fillStyle = ft.color;
+                bCtx.fillText(ft.text, ft.x, ft.y);
+                bCtx.globalAlpha = 1;
+            }
+        }
+
+        function refreshAll() {
+            updateTopBar();
+            renderBase();
+            renderSquad();
+            renderTech();
+            updateMissionHeader();
+        }
+
+        refreshAll();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
