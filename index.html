@@ -319,7 +319,7 @@
         const TILE_W = 58;
         const TILE_H = 29;
 
-        // Естественная неровная береговая линия слева (gx < coastX — вода, gx >= coastX — суша)
+        // Естественная неровная береговая линия слева
         function getCoastX(gy) {
             return 13 + Math.sin(gy * 0.14) * 3.8 + Math.cos(gy * 0.065) * 2.4 + Math.sin(gy * 0.31) * 0.9;
         }
@@ -362,7 +362,7 @@
             humvee: {
                 id: 'humvee', tab: 'vehicles', name: 'Бронеджип', icon: '🚙', w: 2, h: 2, cost: 160, maxCount: 10,
                 reqBuilding: 'garage', income: 0, baseHp: 380, baseDmg: 48, baseArmor: 14,
-                desc: 'Лёгкий бронеавтомобиль с турелью. Занимает 2×2 ячейки.'
+                desc: 'Пустынный бронеавтомобиль с пулемётом на крыше. Занимает 2×2 ячейки.'
             },
             artillery: {
                 id: 'artillery', tab: 'vehicles', name: 'САУ «Гром»', icon: '🚜', w: 2, h: 2, cost: 260, maxCount: 6,
@@ -400,11 +400,104 @@
             updateHint();
         }
 
-        /* ================= КАМЕРА 60 ГЦ С ПЛАВНОЙ ИНТЕРПОЛЯЦИЕЙ ================= */
+        /* ================= ГЕНЕРАЦИЯ 3D-ПАЛЬМ И ТЕКСТУРЫ ТРАВЫ ================= */
         const canvas = document.getElementById('world-canvas');
         const ctx = canvas.getContext('2d', { alpha: false });
         let cw = 0, ch = 0, dpr = 1;
 
+        // Процедурная 3D-текстура сочной травы (без квадратов, как на скриншоте)
+        let grassPattern = null;
+        function createGrassPattern() {
+            const pCanvas = document.createElement('canvas');
+            pCanvas.width = 256;
+            pCanvas.height = 256;
+            const pCtx = pCanvas.getContext('2d');
+
+            pCtx.fillStyle = '#89b424';
+            pCtx.fillRect(0, 0, 256, 256);
+
+            // Мягкие солнечные и тенистые пятна рельефа травы
+            for (let i = 0; i < 45; i++) {
+                const x = (i * 73) % 256;
+                const y = (i * 137) % 256;
+                const r = 18 + (i % 26);
+                const grad = pCtx.createRadialGradient(x, y, 2, x, y, r);
+                if (i % 2 === 0) {
+                    grad.addColorStop(0, 'rgba(164, 204, 52, 0.35)');
+                    grad.addColorStop(1, 'rgba(164, 204, 52, 0)');
+                } else {
+                    grad.addColorStop(0, 'rgba(104, 145, 22, 0.3)');
+                    grad.addColorStop(1, 'rgba(104, 145, 22, 0)');
+                }
+                pCtx.fillStyle = grad;
+                pCtx.beginPath();
+                pCtx.arc(x, y, r, 0, Math.PI * 2);
+                pCtx.fill();
+            }
+
+            // Мелкие травинки для ощущения объёма
+            for (let i = 0; i < 420; i++) {
+                const x = (i * 53 + 17) % 256;
+                const y = (i * 97 + 29) % 256;
+                pCtx.fillStyle = i % 3 === 0 ? 'rgba(182, 220, 68, 0.45)' : 'rgba(92, 130, 18, 0.38)';
+                pCtx.fillRect(x, y, 2, 4);
+            }
+
+            grassPattern = ctx.createPattern(pCanvas, 'repeat');
+        }
+        createGrassPattern();
+
+        // Генерация 3D-пальм: часть кучками (рощами), часть одиночными, разных размеров
+        const mapPalms = [];
+        function generatePalms() {
+            let seed = 4219;
+            function rand() {
+                seed = (seed * 16807) % 2147483647;
+                return (seed - 1) / 2147483646;
+            }
+
+            // 1. Рощи / кучки пальм (по 3–6 деревьев вместе)
+            for (let c = 0; c < 65; c++) {
+                const cx = 19 + rand() * (MAP_SIZE - 23);
+                const cy = 4 + rand() * (MAP_SIZE - 8);
+                // Оставляем стартовую поляну у берега чуть свободнее для первой базы
+                if (Math.hypot(cx - 24, cy - 46) < 7) continue;
+
+                const count = 3 + Math.floor(rand() * 4);
+                for (let k = 0; k < count; k++) {
+                    const gx = cx + (rand() - 0.5) * 4.2;
+                    const gy = cy + (rand() - 0.5) * 4.2;
+                    if (gx > getCoastX(gy) + 2.2 && gx < MAP_SIZE - 2 && gy > 1 && gy < MAP_SIZE - 2) {
+                        mapPalms.push({
+                            gx, gy,
+                            scale: 0.72 + rand() * 0.65,
+                            lean: (rand() - 0.5) * 14,
+                            phase: rand() * Math.PI * 2,
+                            isBush: rand() < 0.22 // иногда рядом с пальмами растёт густой куст
+                        });
+                    }
+                }
+            }
+
+            // 2. Одиночные пальмы разного размера по всей карте
+            for (let s = 0; s < 140; s++) {
+                const gx = 18 + rand() * (MAP_SIZE - 21);
+                const gy = 2 + rand() * (MAP_SIZE - 4);
+                if (Math.hypot(gx - 24, gy - 46) < 5.5) continue;
+                if (gx > getCoastX(gy) + 2.0) {
+                    mapPalms.push({
+                        gx, gy,
+                        scale: 0.68 + rand() * 0.72,
+                        lean: (rand() - 0.5) * 16,
+                        phase: rand() * Math.PI * 2,
+                        isBush: rand() < 0.18
+                    });
+                }
+            }
+        }
+        generatePalms();
+
+        /* ================= КАМЕРА 60 ГЦ С ПЛАВНОЙ ИНТЕРПОЛЯЦИЕЙ ================= */
         const cam = {
             x: 0, y: 0, zoom: 1.0,
             targetX: 0, targetY: 0, targetZoom: 1.0
@@ -437,7 +530,6 @@
         }
 
         function centerCamera(instant = false) {
-            // Центрируем рядом с берегом, чтобы сразу было видно воду слева и зелёное поле
             const focus = gridToWorld(23, 46);
             cam.targetX = -focus.x;
             cam.targetY = -focus.y;
@@ -460,7 +552,6 @@
         /* ================= ПРОВЕРКА ЗАНЯТОСТИ И ВОДЫ ================= */
         function canPlaceAt(gx, gy, w, h, ignoreUid = null) {
             if (gx < 0 || gy < 0 || gx + w > MAP_SIZE || gy + h > MAP_SIZE) return false;
-            // Запрет строительства на воде и самом краю берега
             for (let x = gx; x < gx + w; x++) {
                 for (let y = gy; y < gy + h; y++) {
                     if (isWaterTile(x, y)) return false;
@@ -478,6 +569,17 @@
                 if (overlap) return false;
             }
             return true;
+        }
+
+        function isCoveredByEntity(px, py) {
+            for (const ent of gameState.entities) {
+                const cfg = CATALOG[ent.type];
+                const pad = cfg.tab === 'buildings' ? 0.6 : 0.2;
+                if (px >= ent.gx - pad && px <= ent.gx + cfg.w + pad && py >= ent.gy - pad && py <= ent.gy + cfg.h + pad) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         function getEntityAt(gx, gy) {
@@ -754,7 +856,7 @@
             }
         }
 
-        /* ================= 3D ГРАФИКА: ВОДА, ПЕСОК ПОД ЗДАНИЯМИ И ДЕТАЛЬНЫЙ ШТАБ ================= */
+        /* ================= 3D ГРАФИКА: ПАЛЬМЫ, ВОДА, ШТАБ И БРОНЕДЖИП ================= */
         function drawIsoDiamond(gx, gy, w, h, fill, stroke = null, lineWidth = 1) {
             const p0 = gridToWorld(gx, gy);
             const p1 = gridToWorld(gx + w, gy);
@@ -813,14 +915,104 @@
             ctx.fill();
         }
 
-        // Песчаное поле, появляющееся только под установленными зданиями (3x3)
+        // 3D-пальма с тенью и плавным покачиванием
+        function draw3DPalm(palm, timeSec) {
+            const pos = gridToWorld(palm.gx, palm.gy);
+            const s = palm.scale;
+
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+
+            if (palm.isBush) {
+                // Густой 3D-куст с тенью
+                ctx.fillStyle = 'rgba(20, 35, 8, 0.34)';
+                ctx.beginPath();
+                ctx.ellipse(5 * s, 3 * s, 16 * s, 8 * s, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#335c14';
+                ctx.beginPath();
+                ctx.arc(-5 * s, -6 * s, 9 * s, 0, Math.PI * 2);
+                ctx.arc(6 * s, -5 * s, 8 * s, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#558b1f';
+                ctx.beginPath();
+                ctx.arc(0, -10 * s, 9.5 * s, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+
+            const sway = Math.sin(timeSec * 1.4 + palm.phase) * 2.2 * s;
+            const topX = palm.lean * s + sway;
+            const topY = -44 * s;
+
+            // 1. Тень от пальмы на траве (направлена вправо-вниз)
+            ctx.fillStyle = 'rgba(22, 38, 8, 0.30)';
+            ctx.beginPath();
+            ctx.ellipse(14 * s, 4 * s, 18 * s, 7.5 * s, 0.15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(22, 38, 8, 0.28)';
+            ctx.lineWidth = 3.5 * s;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(13 * s, 3 * s);
+            ctx.stroke();
+
+            // 2. Изогнутый 3D-ствол пальмы
+            ctx.strokeStyle = '#6b4a26';
+            ctx.lineWidth = 5.5 * s;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(topX * 0.35, topY * 0.55, topX, topY);
+            ctx.stroke();
+
+            // Светлая сторона ствола для 3D-объёма
+            ctx.strokeStyle = '#996e3b';
+            ctx.lineWidth = 2.4 * s;
+            ctx.beginPath();
+            ctx.moveTo(-1 * s, -1 * s);
+            ctx.quadraticCurveTo(topX * 0.35 - 1 * s, topY * 0.55, topX - 0.8 * s, topY);
+            ctx.stroke();
+
+            // 3. 3D-крона из 7 изогнутых пальмовых ветвей
+            const frondAngles = [-2.6, -2.0, -1.2, -0.4, 0.3, 1.0, 2.2];
+            frondAngles.forEach((ang, idx) => {
+                const len = (17 + (idx % 2) * 5) * s;
+                const ex = topX + Math.cos(ang) * len;
+                const ey = topY + Math.sin(ang) * (len * 0.55) + 6 * s;
+                const cx = topX + Math.cos(ang) * (len * 0.55);
+                const cy = topY + Math.sin(ang) * (len * 0.25) - 5 * s;
+
+                // Тёмная подложка листа
+                ctx.strokeStyle = idx % 2 === 0 ? '#2f5e16' : '#3d751c';
+                ctx.lineWidth = 4.6 * s;
+                ctx.beginPath();
+                ctx.moveTo(topX, topY);
+                ctx.quadraticCurveTo(cx, cy, ex, ey);
+                ctx.stroke();
+
+                // Светлый верх листа
+                ctx.strokeStyle = idx % 2 === 0 ? '#5c9c24' : '#73b82e';
+                ctx.lineWidth = 2.2 * s;
+                ctx.beginPath();
+                ctx.moveTo(topX, topY - 1 * s);
+                ctx.quadraticCurveTo(cx, cy - 1.2 * s, ex, ey - 1 * s);
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
         function drawBuildingSandBase(gx, gy, w, h) {
             const center = gridToWorld(gx + w * 0.5, gy + h * 0.5);
             const rad = w * TILE_W * 0.44;
             const grad = ctx.createRadialGradient(center.x, center.y, rad * 0.25, center.x, center.y, rad);
-            grad.addColorStop(0, 'rgba(227, 210, 146, 0.95)');
-            grad.addColorStop(0.65, 'rgba(218, 198, 132, 0.85)');
-            grad.addColorStop(1, 'rgba(130, 165, 58, 0)');
+            grad.addColorStop(0, 'rgba(227, 210, 146, 0.96)');
+            grad.addColorStop(0.68, 'rgba(218, 198, 132, 0.85)');
+            grad.addColorStop(1, 'rgba(137, 180, 36, 0)');
 
             ctx.save();
             ctx.translate(center.x, center.y);
@@ -832,26 +1024,25 @@
             ctx.restore();
         }
 
-        // 3D-береговая линия слева с плавными волнами
         function drawCoastAndWater(timeSec) {
             const step = 1;
+            const farB1 = gridToWorld(-22, MAP_SIZE + 2);
+            const farT1 = gridToWorld(-22, -2);
 
-            // 1. Песчаная кромка берега
+            // Песчаный пляж вдоль воды
             ctx.beginPath();
             for (let gy = -2; gy <= MAP_SIZE + 2; gy += step) {
-                const p = gridToWorld(getCoastX(gy) + 1.2, gy);
+                const p = gridToWorld(getCoastX(gy) + 1.5, gy);
                 if (gy === -2) ctx.moveTo(p.x, p.y);
                 else ctx.lineTo(p.x, p.y);
             }
-            const farB1 = gridToWorld(-18, MAP_SIZE + 2);
-            const farT1 = gridToWorld(-18, -2);
             ctx.lineTo(farB1.x, farB1.y);
             ctx.lineTo(farT1.x, farT1.y);
             ctx.closePath();
-            ctx.fillStyle = '#d9c782';
+            ctx.fillStyle = '#e3d28e';
             ctx.fill();
 
-            // 2. 3D-ступенька берега (откос в воду)
+            // 3D-ступенька берега
             ctx.beginPath();
             for (let gy = -2; gy <= MAP_SIZE + 2; gy += step) {
                 const p = gridToWorld(getCoastX(gy) + 0.15, gy);
@@ -861,13 +1052,13 @@
             ctx.lineTo(farB1.x, farB1.y);
             ctx.lineTo(farT1.x, farT1.y);
             ctx.closePath();
-            ctx.fillStyle = '#9a8c57';
+            ctx.fillStyle = '#a6965d';
             ctx.fill();
 
-            // 3. Мелководье (бирюзовая 3D-вода)
+            // Бирюзовое мелководье
             ctx.beginPath();
             for (let gy = -2; gy <= MAP_SIZE + 2; gy += step) {
-                const wave = Math.sin(timeSec * 1.8 + gy * 0.45) * 0.14;
+                const wave = Math.sin(timeSec * 1.7 + gy * 0.45) * 0.14;
                 const p = gridToWorld(getCoastX(gy) - 0.15 + wave, gy);
                 if (gy === -2) ctx.moveTo(p.x, p.y + 4);
                 else ctx.lineTo(p.x, p.y + 4);
@@ -875,50 +1066,153 @@
             ctx.lineTo(farB1.x, farB1.y + 4);
             ctx.lineTo(farT1.x, farT1.y + 4);
             ctx.closePath();
-            ctx.fillStyle = '#29a3b8';
+            ctx.fillStyle = '#1db5d4';
             ctx.fill();
 
-            // 4. Глубокая вода
+            // Глубокая вода
             ctx.beginPath();
             for (let gy = -2; gy <= MAP_SIZE + 2; gy += step) {
-                const wave = Math.sin(timeSec * 1.4 + gy * 0.35 + 1) * 0.22;
-                const p = gridToWorld(getCoastX(gy) - 2.6 + wave, gy);
+                const wave = Math.sin(timeSec * 1.3 + gy * 0.35 + 1) * 0.22;
+                const p = gridToWorld(getCoastX(gy) - 2.8 + wave, gy);
                 if (gy === -2) ctx.moveTo(p.x, p.y + 5);
                 else ctx.lineTo(p.x, p.y + 5);
             }
             ctx.lineTo(farB1.x, farB1.y + 5);
             ctx.lineTo(farT1.x, farT1.y + 5);
             ctx.closePath();
-            ctx.fillStyle = '#1b6ca8';
+            ctx.fillStyle = '#1089b8';
             ctx.fill();
 
-            // 5. Плавная пена волн вдоль берега (2 мягких слоя)
+            // Мягкие волны вдоль берега
             for (let layer = 0; layer < 2; layer++) {
-                const phase = (timeSec * 0.7 + layer * 0.5) % 1;
-                const alpha = Math.sin(phase * Math.PI) * 0.55;
+                const phase = (timeSec * 0.65 + layer * 0.5) % 1;
+                const alpha = Math.sin(phase * Math.PI) * 0.52;
                 const offset = -0.25 - phase * 1.35;
 
                 ctx.beginPath();
                 for (let gy = 0; gy <= MAP_SIZE; gy += 1) {
-                    const ripple = Math.sin(timeSec * 2.2 + gy * 0.6 + layer) * 0.16;
+                    const ripple = Math.sin(timeSec * 2.1 + gy * 0.6 + layer) * 0.15;
                     const p = gridToWorld(getCoastX(gy) + offset + ripple, gy);
                     if (gy === 0) ctx.moveTo(p.x, p.y + 4);
                     else ctx.lineTo(p.x, p.y + 4);
                 }
-                ctx.strokeStyle = `rgba(225, 250, 255, ${alpha.toFixed(3)})`;
-                ctx.lineWidth = layer === 0 ? 2.5 : 1.8;
+                ctx.strokeStyle = `rgba(230, 252, 255, ${alpha.toFixed(3)})`;
+                ctx.lineWidth = layer === 0 ? 2.5 : 1.7;
                 ctx.stroke();
             }
         }
 
-        // Детализированная 3D-модель Штаба (как на скриншоте пользователя)
-        function drawDetailedHQ(gx, gy) {
-            const pCenter = gridToWorld(gx + 1.5, gy + 1.5);
+        // Детализированный 3D-бронеджип с пулемётом (как на твоём скриншоте)
+        function drawDetailedHumvee(gx, gy) {
+            // Тень на земле
+            drawIsoDiamond(gx + 0.18, gy + 0.28, 1.65, 1.45, 'rgba(18, 22, 12, 0.38)');
 
-            // Мягкая тень под палаткой
+            // Внедорожные колёса с пустынными дисками
+            const wheelCoords = [
+                { x: gx + 0.42, y: gy + 1.45 }, // переднее левое
+                { x: gx + 1.42, y: gy + 1.45 }, // заднее левое
+                { x: gx + 1.45, y: gy + 0.52 }  // заднее правое (частично видно)
+            ];
+            wheelCoords.forEach(wc => {
+                const wp = gridToWorld(wc.x, wc.y);
+                ctx.fillStyle = '#1e2226';
+                ctx.beginPath();
+                ctx.ellipse(wp.x, wp.y - 4, 9.5, 11.5, -0.35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#3b424a';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                // Диск колеса
+                ctx.fillStyle = '#b8a256';
+                ctx.beginPath();
+                ctx.ellipse(wp.x + 1, wp.y - 4, 4.2, 5.2, -0.35, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Нижний бампер и подножка
+            drawIsoBox(gx + 0.15, gy + 0.38, 1.65, 1.15, 7, '#5c5234', '#383222', '#262218');
+
+            // Капот (песочный цвет, передняя часть)
+            drawIsoBox(gx + 0.18, gy + 0.42, 0.58, 1.06, 15, '#e6d383', '#ccb562', '#a18c43');
+
+            // Вентиляционные прорези на капоте (как на фото)
+            for (let v = 0; v < 4; v++) {
+                drawIsoBox(gx + 0.26 + v * 0.11, gy + 0.62, 0.06, 0.65, 15.6, '#3d3620', '#2b2617', '#2b2617');
+            }
+
+            // Чёрная решётка радиатора и фары спереди
+            const grillA = gridToWorld(gx + 0.18, gy + 0.52);
+            const grillB = gridToWorld(gx + 0.18, gy + 1.38);
+            ctx.strokeStyle = '#222529';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(grillA.x, grillA.y - 8);
+            ctx.lineTo(grillB.x, grillB.y - 8);
+            ctx.stroke();
+
+            // Основная бронекабина
+            drawIsoBox(gx + 0.68, gy + 0.42, 0.85, 1.06, 25, '#ebd98c', '#c9b261', '#9c8740');
+
+            // Задний багажный отсек
+            drawIsoBox(gx + 1.48, gy + 0.44, 0.36, 1.02, 16, '#dec978', '#baa354', '#8f7b38');
+
+            // Разделённое лобовое стекло (2 тёмно-синих бронестекла)
+            drawIsoBox(gx + 0.66, gy + 0.49, 0.06, 0.42, 23, '#334155', '#1e293b', '#0f172a');
+            drawIsoBox(gx + 0.66, gy + 0.99, 0.06, 0.42, 23, '#334155', '#1e293b', '#0f172a');
+
+            // Боковые окна (на левой видимой двери)
+            drawIsoBox(gx + 0.78, gy + 1.44, 0.30, 0.06, 23, '#334155', '#1e293b', '#0f172a');
+            drawIsoBox(gx + 1.15, gy + 1.44, 0.30, 0.06, 23, '#334155', '#1e293b', '#0f172a');
+
+            // X-образные рёбра жёсткости на дверях
+            const door1 = gridToWorld(gx + 0.93, gy + 1.49);
+            const door2 = gridToWorld(gx + 1.30, gy + 1.49);
+            ctx.strokeStyle = '#8a7635';
+            ctx.lineWidth = 1.4;
+            [door1, door2].forEach(dp => {
+                ctx.beginPath();
+                ctx.moveTo(dp.x - 5, dp.y - 16); ctx.lineTo(dp.x + 5, dp.y - 8);
+                ctx.moveTo(dp.x + 5, dp.y - 16); ctx.lineTo(dp.x - 5, dp.y - 8);
+                ctx.stroke();
+            });
+
+            // Круглая турель на крыше
+            const roofC = gridToWorld(gx + 1.05, gy + 0.95);
+            ctx.fillStyle = '#b59f51';
+            ctx.strokeStyle = '#6e5e2b';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(roofC.x, roofC.y - 26, 11, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Чёрный крупнокалиберный пулемёт на турели
+            ctx.strokeStyle = '#181a1f';
+            ctx.lineWidth = 3.2;
+            ctx.beginPath();
+            ctx.moveTo(roofC.x, roofC.y - 26);
+            ctx.lineTo(roofC.x, roofC.y - 33);
+            ctx.stroke();
+
+            // Тело и ствол пулемёта
+            ctx.strokeStyle = '#111317';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(roofC.x + 8, roofC.y - 36);
+            ctx.lineTo(roofC.x - 8, roofC.y - 30);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#2d323b';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(roofC.x - 7, roofC.y - 30);
+            ctx.lineTo(roofC.x - 20, roofC.y - 25);
+            ctx.stroke();
+        }
+
+        function drawDetailedHQ(gx, gy) {
             drawIsoDiamond(gx + 0.35, gy + 0.45, 2.35, 2.25, 'rgba(35, 32, 18, 0.32)');
 
-            // Растяжки (канаты от крыши к колышкам в песке)
             const tentTopL = gridToWorld(gx + 0.55, gy + 0.65);
             const tentTopR = gridToWorld(gx + 2.35, gy + 0.65);
             const tentBotR = gridToWorld(gx + 2.35, gy + 2.25);
@@ -934,22 +1228,13 @@
             ctx.moveTo(tentTopR.x, tentTopR.y - 24); ctx.lineTo(stakeB.x, stakeB.y);
             ctx.stroke();
 
-            // Колышки
             ctx.fillStyle = '#3b2f1e';
             [stakeL, stakeB, stakeR].forEach(st => {
                 ctx.fillRect(st.x - 1.5, st.y - 4, 3, 5);
             });
 
-            // Основной корпус палатки (камуфляжные брезентовые стены)
             drawIsoBox(gx + 0.6, gy + 0.65, 1.85, 1.65, 28, '#8c7651', '#7a6544', '#59482e');
 
-            // Камуфляжные пятна на стенах
-            const wallF = gridToWorld(gx + 1.4, gy + 2.3);
-            ctx.fillStyle = '#4f432b';
-            ctx.fillRect(wallF.x - 14, wallF.y - 18, 9, 7);
-            ctx.fillRect(wallF.x + 2, wallF.y - 11, 8, 6);
-
-            // Тёмный вход в палатку (под козырьком слева)
             const doorL = gridToWorld(gx + 0.72, gy + 2.3);
             const doorR = gridToWorld(gx + 1.38, gy + 2.3);
             ctx.beginPath();
@@ -961,12 +1246,9 @@
             ctx.fillStyle = '#1f1912';
             ctx.fill();
 
-            // Деревянный стол и лавка под передним козырьком
             drawIsoBox(gx + 0.45, gy + 2.38, 0.75, 0.35, 7, '#a88454', '#785a32', '#594122');
-            // Карта на столе
             drawIsoBox(gx + 0.58, gy + 2.42, 0.42, 0.25, 7.8, '#f1f5f9', '#cbd5e1', '#94a3b8');
 
-            // Передний камуфляжный козырёк (навес) на двух стойках
             const pole1 = gridToWorld(gx + 0.35, gy + 2.75);
             const pole2 = gridToWorld(gx + 1.35, gy + 2.75);
             ctx.strokeStyle = '#94a3b8';
@@ -976,7 +1258,6 @@
             ctx.moveTo(pole2.x, pole2.y); ctx.lineTo(pole2.x, pole2.y - 21);
             ctx.stroke();
 
-            // Полотно козырька
             const aw0 = gridToWorld(gx + 0.55, gy + 2.25);
             const aw1 = gridToWorld(gx + 1.45, gy + 2.25);
             const aw2 = gridToWorld(gx + 1.38, gy + 2.8);
@@ -993,7 +1274,6 @@
             ctx.lineWidth = 1;
             ctx.stroke();
 
-            // Двускатная крыша штаба
             const rFL = gridToWorld(gx + 0.5, gy + 2.38);
             const rFR = gridToWorld(gx + 2.52, gy + 2.38);
             const rBL = gridToWorld(gx + 0.5, gy + 0.55);
@@ -1001,7 +1281,6 @@
             const ridgeL = gridToWorld(gx + 1.5, gy + 0.55);
             const ridgeR = gridToWorld(gx + 1.5, gy + 2.38);
 
-            // Задний скат крыши
             ctx.beginPath();
             ctx.moveTo(rBL.x, rBL.y - 27);
             ctx.lineTo(ridgeL.x, ridgeL.y - 44);
@@ -1011,7 +1290,6 @@
             ctx.fillStyle = '#5c4b32';
             ctx.fill();
 
-            // Передний скат крыши
             ctx.beginPath();
             ctx.moveTo(ridgeL.x, ridgeL.y - 44);
             ctx.lineTo(rBR.x, rBR.y - 27);
@@ -1021,7 +1299,6 @@
             ctx.fillStyle = '#6e5838';
             ctx.fill();
 
-            // Плотная объёмная масксеть на крыше (коричневые, оливковые и жёлтые листья)
             const leafColors = ['#6b4f2e', '#4b592c', '#d9c541', '#85653e', '#3a4521'];
             for (let i = 0; i < 48; i++) {
                 const u = ((i * 19) % 100) / 100;
@@ -1038,10 +1315,8 @@
                 ctx.fill();
             }
 
-            // Зелёный армейский ящик радиостанции справа у палатки
             drawIsoBox(gx + 2.35, gy + 1.85, 0.42, 0.38, 10, '#4d7c0f', '#365314', '#1a2e05');
 
-            // Радиомачта с треногой и растяжками справа
             const antBase = gridToWorld(gx + 2.55, gy + 1.75);
             const antTopY = antBase.y - 74;
             ctx.strokeStyle = '#334155';
@@ -1051,7 +1326,6 @@
             ctx.lineTo(antBase.x, antTopY);
             ctx.stroke();
 
-            // Растяжки антенны
             ctx.strokeStyle = 'rgba(203, 213, 225, 0.65)';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -1126,10 +1400,7 @@
                 ctx.lineTo(center.x + (ent.type === 'sniper' ? 16 : 11), center.y - 9);
                 ctx.stroke();
             } else if (ent.type === 'humvee') {
-                drawIsoDiamond(gx + 0.25, gy + 0.25, 1.5, 1.5, 'rgba(0,0,0,0.32)');
-                drawIsoBox(gx + 0.3, gy + 0.4, 1.4, 1.1, 14, '#8c7a53', '#6b5c3d', '#4f432b');
-                drawIsoBox(gx + 0.5, gy + 0.5, 0.9, 0.9, 21, '#a39067', '#786847', '#594c32');
-                drawIsoBox(gx + 0.8, gy + 0.8, 0.35, 0.35, 25, '#1e293b', '#0f172a', '#0f172a');
+                drawDetailedHumvee(gx, gy);
             } else if (ent.type === 'artillery') {
                 drawIsoDiamond(gx + 0.2, gy + 0.2, 1.6, 1.6, 'rgba(0,0,0,0.35)');
                 drawIsoBox(gx + 0.25, gy + 0.3, 1.5, 1.4, 13, '#57534e', '#44403c', '#292524');
@@ -1143,7 +1414,7 @@
             }
 
             if (!isGhost) {
-                const topOffset = cfg.w === 3 ? 56 : (cfg.w === 2 ? 32 : 26);
+                const topOffset = cfg.w === 3 ? 56 : (cfg.w === 2 ? 38 : 26);
                 ctx.fillStyle = 'rgba(15, 23, 42, 0.84)';
                 ctx.beginPath();
                 ctx.roundRect(center.x - 16, center.y - topOffset - 12, 32, 14, 5);
@@ -1159,7 +1430,7 @@
         }
 
         function renderWorld(timeSec) {
-            ctx.fillStyle = '#1b6ca8';
+            ctx.fillStyle = '#1089b8';
             ctx.fillRect(0, 0, cw, ch);
 
             ctx.save();
@@ -1167,13 +1438,13 @@
             ctx.scale(cam.zoom, cam.zoom);
             ctx.translate(cam.x, cam.y);
 
-            // 1. Вся карта — ровная сочная зелёная трава
-            drawIsoDiamond(0, 0, MAP_SIZE, MAP_SIZE, '#78a331', '#48661b', 3);
+            // 1. Вся карта — сплошная 3D-трава с живой текстурой (без сетки)
+            drawIsoDiamond(0, 0, MAP_SIZE, MAP_SIZE, grassPattern || '#89b424', '#4d6b18', 3);
 
-            // 2. 3D-вода слева с естественным берегом и плавными волнами
+            // 2. 3D-вода слева с мягкими волнами
             drawCoastAndWater(timeSec);
 
-            // 3. Тактическая сетка (только видимая область)
+            // Вычисляем видимую область карты для 60 FPS оптимизации
             const topLeft = screenToGrid(0, 0);
             const bottomRight = screenToGrid(cw, ch);
             const minG = Math.max(0, Math.min(topLeft.gx, bottomRight.gx) - 18);
@@ -1181,24 +1452,27 @@
             const minY = Math.max(0, Math.min(topLeft.gy, bottomRight.gy) - 18);
             const maxY = Math.min(MAP_SIZE, Math.max(topLeft.gy, bottomRight.gy) + 18);
 
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.11)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            for (let gx = minG; gx <= maxG; gx++) {
-                const a = gridToWorld(gx, minY);
-                const b = gridToWorld(gx, maxY);
-                ctx.moveTo(a.x, a.y);
-                ctx.lineTo(b.x, b.y);
+            // 3. Тактическая сетка появляется ТОЛЬКО при установке/перетаскивании объекта!
+            if (dragGhostState) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let gx = minG; gx <= maxG; gx++) {
+                    const a = gridToWorld(gx, minY);
+                    const b = gridToWorld(gx, maxY);
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                }
+                for (let gy = minY; gy <= maxY; gy++) {
+                    const a = gridToWorld(minG, gy);
+                    const b = gridToWorld(maxG, gy);
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                }
+                ctx.stroke();
             }
-            for (let gy = minY; gy <= maxY; gy++) {
-                const a = gridToWorld(minG, gy);
-                const b = gridToWorld(maxG, gy);
-                ctx.moveTo(a.x, a.y);
-                ctx.lineTo(b.x, b.y);
-            }
-            ctx.stroke();
 
-            // 4. Песчаные площадки ТОЛЬКО под установленными зданиями (3x3)
+            // 4. Песчаные площадки под установленными зданиями (3x3)
             for (const ent of gameState.entities) {
                 if (dragGhostState && dragGhostState.mode === 'move' && dragGhostState.uid === ent.uid) continue;
                 const cfg = CATALOG[ent.type];
@@ -1207,11 +1481,30 @@
                 }
             }
 
-            // 5. Отрисовка объектов в правильном 3D-порядке (по глубине)
-            const sortedEntities = [...gameState.entities].sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy));
-            for (const ent of sortedEntities) {
+            // 5. Собираем видимые 3D-пальмы и объекты базы в один список для правильного 3D-перекрытия
+            const renderList = [];
+
+            for (const palm of mapPalms) {
+                if (palm.gx >= minG && palm.gx <= maxG && palm.gy >= minY && palm.gy <= maxY) {
+                    if (!isCoveredByEntity(palm.gx, palm.gy)) {
+                        renderList.push({ kind: 'palm', depth: palm.gx + palm.gy, data: palm });
+                    }
+                }
+            }
+
+            for (const ent of gameState.entities) {
                 if (dragGhostState && dragGhostState.mode === 'move' && dragGhostState.uid === ent.uid) continue;
-                draw3DEntity(ent, false, true);
+                renderList.push({ kind: 'ent', depth: ent.gx + ent.gy + 0.5, data: ent });
+            }
+
+            renderList.sort((a, b) => a.depth - b.depth);
+
+            for (const item of renderList) {
+                if (item.kind === 'palm') {
+                    draw3DPalm(item.data, timeSec);
+                } else {
+                    draw3DEntity(item.data, false, true);
+                }
             }
 
             // 6. Призрак перетаскиваемого объекта
@@ -1246,17 +1539,14 @@
             const dt = Math.min((now - lastTick) / 1000, 0.05);
             lastTick = now;
 
-            // Плавная 60 Гц интерполяция камеры
             const smooth = Math.min(1, dt * 16);
             cam.x += (cam.targetX - cam.x) * smooth;
             cam.y += (cam.targetY - cam.y) * smooth;
             cam.zoom += (cam.targetZoom - cam.zoom) * smooth;
 
-            // Доход Коинов
             const income = getTotalIncome();
             gameState.coins += income * dt;
 
-            // Обновляем DOM только когда текст реально изменился (экономит FPS)
             const cText = String(Math.floor(gameState.coins));
             if (cText !== lastCoinsText) {
                 lastCoinsText = cText;
