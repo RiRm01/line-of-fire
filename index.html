@@ -3,20 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Линия Огня: Тактика</title>
+    <title>Линия Огня 3D: База</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --bg-dark: #0e1116;
-            --panel-bg: #171c24;
-            --card-bg: #1f2631;
-            --border-color: #2e3847;
-            --accent-gold: #f59e0b;
-            --accent-blue: #38bdf8;
-            --accent-green: #22c55e;
-            --accent-red: #ef4444;
-            --text-main: #f1f5f9;
-            --text-muted: #94a3b8;
+            --panel-bg: rgba(24, 28, 22, 0.94);
+            --card-bg: #252b22;
+            --border-color: #4a5444;
+            --accent-gold: #fbbf24;
+            --accent-green: #4ade80;
+            --accent-red: #f87171;
+            --text-main: #f3f4f6;
+            --text-muted: #a3b19b;
         }
         * {
             box-sizing: border-box;
@@ -27,450 +25,294 @@
         body {
             margin: 0;
             padding: 0;
-            background: var(--bg-dark);
+            background: #5b7a2c;
             color: var(--text-main);
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
             overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            touch-action: none;
         }
 
-        /* Верхняя панель ресурсов */
-        .top-bar {
-            background: var(--panel-bg);
-            border-bottom: 1px solid var(--border-color);
-            padding: 8px 12px;
+        #world-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        #world-canvas:active {
+            cursor: grabbing;
+        }
+
+        /* Верхняя панель в военном стиле */
+        .top-hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            right: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            pointer-events: none;
             z-index: 10;
         }
-        .res-pill {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 5px 8px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .res-top {
+        .hud-box {
+            pointer-events: auto;
+            background: var(--panel-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 6px 12px;
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-weight: 800;
-            font-size: 13px;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.45);
         }
-        .res-rate {
-            font-size: 10px;
+        .coin-val {
+            font-size: 16px;
+            font-weight: 900;
+            color: var(--accent-gold);
+        }
+        .coin-rate {
+            font-size: 11px;
             color: var(--accent-green);
             font-weight: 700;
         }
-
-        /* Основная рабочая область */
-        .content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-            padding-bottom: 78px;
+        .coords-badge {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--text-muted);
         }
-        .screen {
-            display: none;
+
+        /* Кнопки зума справа */
+        .zoom-controls {
+            position: fixed;
+            right: 10px;
+            top: 62px;
+            display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 6px;
+            z-index: 10;
         }
-        .screen.active {
-            display: flex;
-        }
-
-        .section-title {
-            font-size: 16px;
+        .zoom-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: var(--panel-bg);
+            border: 2px solid var(--border-color);
+            color: #fff;
+            font-size: 20px;
             font-weight: 900;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            color: var(--accent-gold);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* Визуальная панорама базы */
-        .base-visual {
-            background: linear-gradient(180deg, #1b2838 0%, #263529 65%, #1d2920 100%);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 12px;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            position: relative;
-            box-shadow: inset 0 0 25px rgba(0,0,0,0.6);
-        }
-        .b-plot {
-            background: rgba(15, 23, 42, 0.72);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 12px;
-            padding: 8px 4px;
-            text-align: center;
             cursor: pointer;
-            transition: transform 0.12s;
-        }
-        .b-plot:active { transform: scale(0.96); }
-        .b-plot.hq {
-            grid-column: span 3;
-            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(15, 23, 42, 0.85));
-            border-color: rgba(245, 158, 11, 0.45);
-        }
-        .b-icon { font-size: 24px; }
-        .b-plot-name { font-size: 11px; font-weight: 800; margin-top: 2px; }
-        .b-plot-lvl {
-            display: inline-block;
-            background: var(--accent-gold);
-            color: #000;
-            font-size: 10px;
-            font-weight: 900;
-            padding: 1px 6px;
-            border-radius: 6px;
-            margin-top: 3px;
-        }
-
-        /* Карточки зданий, юнитов и технологий */
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-        }
-        .card-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .avatar {
-            width: 46px;
-            height: 46px;
-            border-radius: 12px;
-            background: #11161f;
-            border: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
         }
-        .card-name {
-            font-weight: 800;
-            font-size: 15px;
-        }
-        .card-sub {
+        .zoom-btn:active { transform: scale(0.94); }
+
+        /* Подсказка сверху по центру */
+        #banner-hint {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 24, 18, 0.9);
+            border: 1px solid var(--accent-gold);
+            color: #fef08a;
+            padding: 6px 14px;
+            border-radius: 20px;
             font-size: 12px;
-            color: var(--text-muted);
-        }
-        .lvl-badge {
-            background: #2b3544;
-            color: var(--accent-blue);
-            font-weight: 900;
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: 8px;
+            font-weight: 700;
+            z-index: 9;
+            pointer-events: none;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
 
-        /* Сетка характеристик */
-        .stats-grid {
+        /* Карточка выбранного объекта на карте */
+        #inspector-panel {
+            position: fixed;
+            bottom: 112px;
+            left: 10px;
+            right: 10px;
+            max-width: 420px;
+            margin: 0 auto;
+            background: var(--panel-bg);
+            border: 2px solid var(--accent-gold);
+            border-radius: 16px;
+            padding: 12px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 20;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.7);
+        }
+        .insp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .insp-title {
+            font-size: 15px;
+            font-weight: 900;
+            color: var(--accent-gold);
+        }
+        .insp-size {
+            font-size: 11px;
+            background: #364031;
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-weight: 800;
+        }
+        .insp-stats {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 6px;
-            background: rgba(14, 17, 22, 0.55);
-            padding: 8px;
+            background: rgba(0,0,0,0.35);
+            padding: 7px;
             border-radius: 10px;
-        }
-        .stat-item {
             text-align: center;
         }
-        .stat-lbl { font-size: 10px; color: var(--text-muted); }
-        .stat-val { font-size: 12.5px; font-weight: 800; }
-
-        .skill-desc {
-            font-size: 12px;
-            background: rgba(56, 189, 248, 0.1);
-            border-left: 3px solid var(--accent-blue);
-            padding: 6px 8px;
-            border-radius: 4px;
-            color: #cbd5e1;
+        .st-lbl { font-size: 10px; color: var(--text-muted); }
+        .st-val { font-size: 12.5px; font-weight: 800; }
+        .insp-actions {
+            display: flex;
+            gap: 8px;
         }
-
-        /* Кнопки прокачки */
-        .btn {
+        .act-btn {
+            flex: 1;
             border: none;
             border-radius: 10px;
-            padding: 10px 12px;
+            padding: 9px;
             font-weight: 800;
-            font-size: 13px;
+            font-size: 12.5px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: opacity 0.15s, transform 0.1s;
-        }
-        .btn:active { transform: scale(0.98); }
-        .btn-upgrade {
-            background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
             color: #fff;
-            box-shadow: 0 3px 0 #14532d;
         }
-        .btn-upgrade:disabled {
-            background: #2c3543;
-            color: #64748b;
-            box-shadow: none;
-            cursor: not-allowed;
-        }
-        .btn-battle {
-            background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
-            color: #fff;
-            font-size: 15px;
-            padding: 13px;
-            box-shadow: 0 4px 0 #7f1d1d;
-        }
+        .btn-upg { background: linear-gradient(180deg, #22c55e, #15803d); }
+        .btn-upg:disabled { background: #374151; color: #9ca3af; cursor: not-allowed; }
+        .btn-move { background: linear-gradient(180deg, #3b82f6, #1d4ed8); }
+        .btn-close { background: #3f473b; max-width: 42px; }
 
-        /* Ветка технологий */
-        .tech-branch {
-            border-left: 3px solid var(--accent-gold);
-            padding-left: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .tech-branch-title {
-            font-size: 13px;
-            font-weight: 800;
-            color: var(--accent-blue);
-        }
-
-        /* Экран боя */
-        .battle-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--card-bg);
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-        }
-        #battle-canvas {
-            width: 100%;
-            height: 230px;
-            background: #131a15;
-            border-radius: 14px;
-            border: 1px solid var(--border-color);
-            display: block;
-        }
-        .skills-bar {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
-        .skill-btn {
-            background: #1e293b;
-            border: 1px solid var(--accent-blue);
-            color: #fff;
-            border-radius: 12px;
-            padding: 9px 8px;
-            text-align: left;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-        .skill-btn.ready {
-            background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);
-            box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
-        }
-        .skill-btn:disabled {
-            opacity: 0.55;
-            border-color: #334155;
-            cursor: not-allowed;
-        }
-        .skill-btn-top {
-            font-size: 12px;
-            font-weight: 800;
-            display: flex;
-            justify-content: space-between;
-        }
-        .skill-btn-sub {
-            font-size: 10.5px;
-            color: #cbd5e1;
-            margin-top: 2px;
-        }
-
-        /* Нижняя навигация */
-        .nav-bar {
+        /* Нижняя панель строительства и найма (как в Линии Огня) */
+        .bottom-dock {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            height: 64px;
             background: var(--panel-bg);
-            border-top: 1px solid var(--border-color);
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            z-index: 20;
-        }
-        .nav-item {
-            background: none;
-            border: none;
-            color: var(--text-muted);
+            border-top: 2px solid var(--border-color);
+            padding: 8px 10px 10px;
+            z-index: 15;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
+            gap: 6px;
+        }
+        .dock-tabs {
+            display: flex;
+            gap: 6px;
+        }
+        .d-tab {
+            flex: 1;
+            background: #2c3428;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            border-radius: 8px;
+            padding: 5px;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 800;
             cursor: pointer;
         }
-        .nav-item.active {
-            color: var(--accent-gold);
-            background: rgba(245, 158, 11, 0.08);
+        .d-tab.active {
+            background: #4b5d3f;
+            color: #fff;
+            border-color: var(--accent-gold);
         }
-        .nav-item.battle-tab {
-            color: var(--accent-red);
-        }
-        .nav-item.battle-tab.active {
-            background: rgba(239, 68, 68, 0.14);
-        }
-        .nav-icon { font-size: 20px; }
-
-        /* Модальное окно победы/поражения */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.8);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            padding: 16px;
-        }
-        .modal-box {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 18px;
-            padding: 20px;
-            width: 100%;
-            max-width: 340px;
-            text-align: center;
+        .build-strip {
             display: flex;
-            flex-direction: column;
-            gap: 12px;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 2px;
         }
+        .build-item {
+            min-width: 96px;
+            background: var(--card-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 12px;
+            padding: 6px 8px;
+            text-align: center;
+            cursor: grab;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .build-item:active { cursor: grabbing; transform: scale(0.96); }
+        .build-item.locked { opacity: 0.5; cursor: not-allowed; }
+        .bi-top {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9.5px;
+            font-weight: 800;
+            color: var(--text-muted);
+        }
+        .bi-icon { font-size: 22px; margin: 2px 0; }
+        .bi-name { font-size: 11px; font-weight: 800; white-space: nowrap; }
+        .bi-cost { font-size: 11px; font-weight: 900; color: var(--accent-gold); margin-top: 2px; }
     </style>
 </head>
 <body>
 
-    <!-- Верхняя панель ресурсов -->
-    <div class="top-bar">
-        <div class="res-pill">
-            <div class="res-top">⚙️ <span id="res-steel">0</span></div>
-            <div class="res-rate" id="rate-steel">+0/с</div>
+    <div class="top-hud">
+        <div class="hud-box">
+            <span style="font-size: 20px;">🪙</span>
+            <div>
+                <div class="coin-val" id="coins-display">500</div>
+                <div class="coin-rate" id="income-display">+0/с</div>
+            </div>
         </div>
-        <div class="res-pill">
-            <div class="res-top">🛢️ <span id="res-fuel">0</span></div>
-            <div class="res-rate" id="rate-fuel">+0/с</div>
-        </div>
-        <div class="res-pill">
-            <div class="res-top">🧪 <span id="res-science">0</span></div>
-            <div class="res-rate" style="color: var(--accent-blue);">Наука</div>
+        <div class="hud-box">
+            <div>
+                <div style="font-size: 11px; font-weight: 800;">Зона 51 • 100×100</div>
+                <div class="coords-badge" id="coords-display">Центр: 50, 50</div>
+            </div>
+            <button onclick="resetBase()" style="background:#3f2a2a; border:1px solid #7f1d1d; color:#fca5a5; border-radius:8px; padding:4px 7px; font-size:10px; font-weight:800; cursor:pointer;">Сброс</button>
         </div>
     </div>
 
-    <div class="content">
-        <!-- ЭКРАН 1: БАЗА -->
-        <div id="screen-base" class="screen active">
-            <div class="section-title">
-                <span>Военная база</span>
-                <span style="font-size: 12px; color: var(--text-muted);" id="base-power">Мощь: 0</span>
-            </div>
+    <div id="banner-hint">Перетяни Штаб (3×3) из нижней панели на поле</div>
 
-            <div class="base-visual" id="base-visual"></div>
-            <div id="buildings-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="changeZoom(0.15)">+</button>
+        <button class="zoom-btn" onclick="changeZoom(-0.15)">−</button>
+        <button class="zoom-btn" style="font-size:14px;" onclick="centerCamera()" title="В центр базы">🎯</button>
+    </div>
+
+    <canvas id="world-canvas"></canvas>
+
+    <!-- Инспектор выбранного здания / бойца / машины -->
+    <div id="inspector-panel">
+        <div class="insp-header">
+            <div>
+                <span class="insp-title" id="insp-name">Штаб (Ур. 1)</span>
+                <span class="insp-size" id="insp-size">3×3</span>
+            </div>
+            <button class="act-btn btn-close" onclick="closeInspector()">✕</button>
         </div>
-
-        <!-- ЭКРАН 2: ОТРЯД И ТАНК -->
-        <div id="screen-squad" class="screen">
-            <div class="section-title">
-                <span>Отряд и Бронетехника</span>
-            </div>
-            <div id="units-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-        </div>
-
-        <!-- ЭКРАН 3: ВЕТКА ТЕХНОЛОГИЙ -->
-        <div id="screen-tech" class="screen">
-            <div class="section-title">
-                <span>Ветка прокачки</span>
-                <span style="font-size: 12px; color: var(--accent-blue);">За 🧪 и ⚙️</span>
-            </div>
-            <div id="tech-list" style="display: flex; flex-direction: column; gap: 14px;"></div>
-        </div>
-
-        <!-- ЭКРАН 4: БОЙ -->
-        <div id="screen-battle" class="screen">
-            <div class="battle-header">
-                <div>
-                    <div style="font-weight: 900; font-size: 15px;" id="mission-title">Миссия 1: Аванпост</div>
-                    <div style="font-size: 12px; color: var(--text-muted);" id="mission-reward">Награда: ⚙️ 150 | 🛢️ 80 | 🧪 25</div>
-                </div>
-                <button class="btn btn-battle" style="padding: 8px 14px; font-size: 13px;" id="btn-start-battle" onclick="startBattle()">В АТАКУ</button>
-            </div>
-
-            <canvas id="battle-canvas"></canvas>
-
-            <div style="font-size: 12px; color: var(--text-muted); text-align: center;" id="battle-status">
-                Нажми «В АТАКУ», чтобы начать штурм сектора
-            </div>
-
-            <div class="skills-bar" id="skills-bar"></div>
+        <div style="font-size:11.5px; color:var(--text-muted);" id="insp-desc"></div>
+        <div class="insp-stats" id="insp-stats"></div>
+        <div class="insp-actions">
+            <button class="act-btn btn-upg" id="insp-upg-btn" onclick="upgradeSelected()">Улучшить</button>
+            <button class="act-btn btn-move" onclick="startMovingSelected()">Передвинуть</button>
         </div>
     </div>
 
-    <!-- Нижнее меню -->
-    <div class="nav-bar">
-        <button class="nav-item active" onclick="switchTab('base', this)">
-            <span class="nav-icon">🏭</span>
-            <span>База</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('squad', this)">
-            <span class="nav-icon">🎖️</span>
-            <span>Отряд и Танк</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('tech', this)">
-            <span class="nav-icon">🧬</span>
-            <span>Ветка умений</span>
-        </button>
-        <button class="nav-item battle-tab" onclick="switchTab('battle', this)">
-            <span class="nav-icon">⚔️</span>
-            <span>В бой</span>
-        </button>
-    </div>
-
-    <!-- Окно результата боя -->
-    <div class="modal-overlay" id="battle-modal">
-        <div class="modal-box">
-            <div style="font-size: 40px;" id="modal-icon">🏆</div>
-            <h2 style="margin: 0;" id="modal-title">Победа!</h2>
-            <p style="margin: 0; font-size: 13px; color: var(--text-muted);" id="modal-desc"></p>
-            <button class="btn btn-upgrade" onclick="closeBattleModal()">Забрать награду</button>
+    <!-- Нижняя панель перетаскивания -->
+    <div class="bottom-dock">
+        <div class="dock-tabs">
+            <button class="d-tab active" onclick="setDockTab('buildings', this)">🏗️ Здания (3×3)</button>
+            <button class="d-tab" onclick="setDockTab('infantry', this)">🪖 Пехота (1×1)</button>
+            <button class="d-tab" onclick="setDockTab('vehicles', this)">🚙 Авто (2×2)</button>
         </div>
+        <div class="build-strip" id="build-strip"></div>
     </div>
 
     <script>
@@ -480,791 +322,741 @@
             tg.ready();
         }
 
-        /* ================= ДАННЫЕ И БАЛАНС ИГРЫ ================= */
-        const defaultState = {
-            steel: 250,
-            fuel: 120,
-            science: 40,
-            mission: 1,
-            lastTick: Date.now(),
-            buildings: {
-                hq: 1,
-                steelMill: 1,
-                oilRig: 1,
-                barracks: 1,
-                tankFactory: 1
+        /* ================= КОНФИГУРАЦИЯ МИРА 100×100 И ОБЪЕКТОВ ================= */
+        const MAP_SIZE = 100;
+        const TILE_W = 56; // ширина изометрической ячейки
+        const TILE_H = 28; // высота изометрической ячейки
+
+        const CATALOG = {
+            // Здания 3x3
+            hq: {
+                id: 'hq', tab: 'buildings', name: 'Штаб', icon: '🏛️', w: 3, h: 3, cost: 200, maxCount: 1,
+                reqHq: 0, income: 2, baseHp: 1200, baseDmg: 0, baseArmor: 20,
+                desc: 'Главный командный центр базы. Открывает постройки и прокачку.'
             },
-            units: {
-                assault: 1,
-                sniper: 1,
-                grenadier: 1,
-                tank: 1
+            barracks: {
+                id: 'barracks', tab: 'buildings', name: 'Казарма', icon: '⛺', w: 3, h: 3, cost: 150, maxCount: 3,
+                reqHq: 1, income: 3, baseHp: 750, baseDmg: 0, baseArmor: 10,
+                desc: 'Полевой лагерь с ограждением. Открывает найм пехоты (1×1).'
             },
-            tech: {
-                dmg1: 0, dmg2: 0, dmg3: 0,
-                hp1: 0,  hp2: 0,  hp3: 0,
-                eco1: 0, eco2: 0, eco3: 0
+            garage: {
+                id: 'garage', tab: 'buildings', name: 'Автопарк', icon: '🏭', w: 3, h: 3, cost: 220, maxCount: 2,
+                reqHq: 1, income: 4, baseHp: 900, baseDmg: 0, baseArmor: 15,
+                desc: 'Ремонтный ангар. Открывает выпуск бронемашин (2×2).'
+            },
+            oilRig: {
+                id: 'oilRig', tab: 'buildings', name: 'Вышка', icon: '🗼', w: 3, h: 3, cost: 180, maxCount: 4,
+                reqHq: 1, income: 8, baseHp: 600, baseDmg: 0, baseArmor: 8,
+                desc: 'Буровая вышка. Приносит стабильный доход Коинов.'
+            },
+
+            // Пехота 1x1
+            soldier: {
+                id: 'soldier', tab: 'infantry', name: 'Штурмовик', icon: '🪖', w: 1, h: 1, cost: 60, maxCount: 20,
+                reqBuilding: 'barracks', income: 0, baseHp: 140, baseDmg: 22, baseArmor: 5,
+                desc: 'Универсальный боец пехоты. Занимает 1×1 ячейку.'
+            },
+            sniper: {
+                id: 'sniper', tab: 'infantry', name: 'Снайпер', icon: '🎯', w: 1, h: 1, cost: 90, maxCount: 15,
+                reqBuilding: 'barracks', income: 0, baseHp: 95, baseDmg: 42, baseArmor: 2,
+                desc: 'Дальнобойный стрелок с высоким уроном. Занимает 1×1 ячейку.'
+            },
+
+            // Авто 2x2
+            humvee: {
+                id: 'humvee', tab: 'vehicles', name: 'Бронеджип', icon: '🚙', w: 2, h: 2, cost: 160, maxCount: 10,
+                reqBuilding: 'garage', income: 0, baseHp: 380, baseDmg: 48, baseArmor: 14,
+                desc: 'Лёгкий бронеавтомобиль с турелью. Занимает 2×2 ячейки.'
+            },
+            artillery: {
+                id: 'artillery', tab: 'vehicles', name: 'САУ «Гром»', icon: '🚜', w: 2, h: 2, cost: 260, maxCount: 6,
+                reqBuilding: 'garage', income: 0, baseHp: 560, baseDmg: 75, baseArmor: 22,
+                desc: 'Тяжёлая боевая машина огневой поддержки. Занимает 2×2 ячейки.'
             }
         };
 
-        let state = JSON.parse(JSON.stringify(defaultState));
+        /* ================= СОСТОЯНИЕ ИГРЫ И СОХРАНЕНИЕ ================= */
+        let gameState = {
+            coins: 500,
+            entities: [], // { uid, type, gx, gy, lvl }
+            nextUid: 1
+        };
+
         try {
-            const saved = JSON.parse(localStorage.getItem('lof_save_v1'));
-            if (saved) {
-                state = {
-                    ...defaultState,
-                    ...saved,
-                    buildings: { ...defaultState.buildings, ...(saved.buildings || {}) },
-                    units: { ...defaultState.units, ...(saved.units || {}) },
-                    tech: { ...defaultState.tech, ...(saved.tech || {}) }
-                };
+            const saved = JSON.parse(localStorage.getItem('lof_iso_100_v1'));
+            if (saved && typeof saved.coins === 'number' && Array.isArray(saved.entities)) {
+                gameState = saved;
             }
         } catch (e) {}
 
-        function saveGame() {
-            state.lastTick = Date.now();
+        function saveState() {
             try {
-                localStorage.setItem('lof_save_v1', JSON.stringify(state));
+                localStorage.setItem('lof_iso_100_v1', JSON.stringify(gameState));
             } catch (e) {}
         }
 
-        const buildingsConfig = [
-            {
-                id: 'hq', name: 'Штаб командования', icon: '🏛️', isHq: true,
-                desc: 'Определяет макс. уровень всех построек и юнитов',
-                statLabel: (lvl) => `Лимит ур. зданий: ${lvl}`,
-                cost: (lvl) => ({ steel: Math.floor(150 * Math.pow(1.65, lvl - 1)), fuel: Math.floor(70 * Math.pow(1.6, lvl - 1)) })
-            },
-            {
-                id: 'steelMill', name: 'Завод стали', icon: '🏭',
-                desc: 'Основной строительный материал базы',
-                statLabel: (lvl) => `Добыча: +${getSteelRate(lvl).toFixed(1)}/с`,
-                cost: (lvl) => ({ steel: Math.floor(80 * Math.pow(1.45, lvl - 1)), fuel: Math.floor(30 * Math.pow(1.4, lvl - 1)) })
-            },
-            {
-                id: 'oilRig', name: 'Нефтевышка', icon: '🛢️',
-                desc: 'Добывает топливо для техники и науки',
-                statLabel: (lvl) => `Добыча: +${getFuelRate(lvl).toFixed(1)}/с`,
-                cost: (lvl) => ({ steel: Math.floor(90 * Math.pow(1.45, lvl - 1)), fuel: Math.floor(25 * Math.pow(1.4, lvl - 1)) })
-            },
-            {
-                id: 'barracks', name: 'Казармы пехоты', icon: '⛺',
-                desc: 'Повышает здоровье всех бойцов отряда',
-                statLabel: (lvl) => `Бонус HP пехоты: +${(lvl - 1) * 8}%`,
-                cost: (lvl) => ({ steel: Math.floor(110 * Math.pow(1.5, lvl - 1)), fuel: Math.floor(45 * Math.pow(1.45, lvl - 1)) })
-            },
-            {
-                id: 'tankFactory', name: 'Танковый завод', icon: '🚜',
-                desc: 'Усиливает урон и броню бронетехники',
-                statLabel: (lvl) => `Урон танка: +${(lvl - 1) * 10}%`,
-                cost: (lvl) => ({ steel: Math.floor(140 * Math.pow(1.55, lvl - 1)), fuel: Math.floor(80 * Math.pow(1.5, lvl - 1)) })
-            }
-        ];
-
-        const unitsConfig = [
-            {
-                id: 'assault', name: 'Штурмовик', role: 'Пехота • Передовая', icon: '🪖', isTank: false,
-                baseHp: 140, baseDmg: 18, baseArmor: 4, crit: 12,
-                skillName: 'Шквальный огонь', skillCd: 7,
-                skillDesc: 'Выпускает очередь по ближайшему врагу (220% урона).',
-                cost: (lvl) => ({ steel: Math.floor(70 * Math.pow(1.42, lvl - 1)), fuel: Math.floor(25 * Math.pow(1.38, lvl - 1)) })
-            },
-            {
-                id: 'sniper', name: 'Снайпер', role: 'Пехота • Дальний бой', icon: '🎯', isTank: false,
-                baseHp: 90, baseDmg: 34, baseArmor: 1, crit: 28,
-                skillName: 'Бронебойный выстрел', skillCd: 9,
-                skillDesc: 'Выстрел в уязвимую точку (300% урона, игнорирует броню).',
-                cost: (lvl) => ({ steel: Math.floor(85 * Math.pow(1.44, lvl - 1)), fuel: Math.floor(35 * Math.pow(1.4, lvl - 1)) })
-            },
-            {
-                id: 'grenadier', name: 'Гранатомётчик', role: 'Пехота • Поддержка', icon: '🚀', isTank: false,
-                baseHp: 115, baseDmg: 25, baseArmor: 3, crit: 10,
-                skillName: 'Залп РПГ', skillCd: 10,
-                skillDesc: 'Накрывает взрывом всех врагов на поле (140% урона по площади).',
-                cost: (lvl) => ({ steel: Math.floor(95 * Math.pow(1.45, lvl - 1)), fuel: Math.floor(45 * Math.pow(1.42, lvl - 1)) })
-            },
-            {
-                id: 'tank', name: 'Танк Т-90 «Титан»', role: 'Тяжёлая бронетехника', icon: '🛡️', isTank: true,
-                baseHp: 460, baseDmg: 48, baseArmor: 16, crit: 15,
-                skillName: 'Фугасный снаряд', skillCd: 11,
-                skillDesc: 'Мощный залп из 125-мм пушки по всем врагам (190% урона).',
-                cost: (lvl) => ({ steel: Math.floor(160 * Math.pow(1.52, lvl - 1)), fuel: Math.floor(110 * Math.pow(1.48, lvl - 1)) })
-            }
-        ];
-
-        const techBranches = [
-            {
-                title: '🔥 Ветка 1: Огневая мощь',
-                nodes: [
-                    { id: 'dmg1', name: 'Калибр 7.62', max: 5, req: null, desc: '+6% к урону пехоты за уровень', sci: 15, steel: 60 },
-                    { id: 'dmg2', name: 'Кумулятивные снаряды', max: 5, req: 'dmg1', desc: '+8% к урону танка за уровень', sci: 30, steel: 130 },
-                    { id: 'dmg3', name: 'Тактический прицел', max: 3, req: 'dmg2', desc: '+5% к шансу крита всего отряда', sci: 55, steel: 240 }
-                ]
-            },
-            {
-                title: '🛡️ Ветка 2: Броня и живучесть',
-                nodes: [
-                    { id: 'hp1', name: 'Кевларовые жилеты', max: 5, req: null, desc: '+7% к HP пехоты за уровень', sci: 15, steel: 60 },
-                    { id: 'hp2', name: 'Динамическая защита', max: 5, req: 'hp1', desc: '+10% к HP и +3 к броне танка', sci: 30, steel: 140 },
-                    { id: 'hp3', name: 'Полевой госпиталь', max: 3, req: 'hp2', desc: 'Восстанавливает 8% HP в бою каждые 8 сек', sci: 60, steel: 260 }
-                ]
-            },
-            {
-                title: '⚡ Ветка 3: Экономика и тактика',
-                nodes: [
-                    { id: 'eco1', name: 'Автоматизация цехов', max: 5, req: null, desc: '+10% к добыче Стали и Топлива', sci: 15, steel: 50 },
-                    { id: 'eco2', name: 'Ускоренная перезарядка', max: 4, req: 'eco1', desc: '-6% времени перезарядки умений', sci: 35, steel: 150 },
-                    { id: 'eco3', name: 'Трофейная разведка', max: 3, req: 'eco2', desc: '+15% ресурсов и науки за победу в бою', sci: 65, steel: 280 }
-                ]
-            }
-        ];
-
-        /* ================= РАСЧЁТ ХАРАКТЕРИСТИК ================= */
-        function getSteelRate(lvl = state.buildings.steelMill) {
-            const ecoBonus = 1 + state.tech.eco1 * 0.10;
-            return (2.5 + (lvl - 1) * 2.2) * ecoBonus;
+        function resetBase() {
+            if (!confirm('Очистить карту 100×100 и начать заново с 500 Коинами?')) return;
+            gameState = { coins: 500, entities: [], nextUid: 1 };
+            selectedEntityUid = null;
+            closeInspector();
+            saveState();
+            renderDock();
+            updateHint();
         }
 
-        function getFuelRate(lvl = state.buildings.oilRig) {
-            const ecoBonus = 1 + state.tech.eco1 * 0.10;
-            return (1.4 + (lvl - 1) * 1.3) * ecoBonus;
+        // Генерация декоративных песчаных пятен на траве (детерминированно, чтобы выглядело как на скрине)
+        const sandPatches = [];
+        for (let i = 0; i < 160; i++) {
+            sandPatches.push({
+                gx: (i * 37) % MAP_SIZE,
+                gy: (i * 53 + 11) % MAP_SIZE,
+                rx: 2 + (i % 4),
+                ry: 2 + ((i * 3) % 3)
+            });
         }
 
-        function getUnitStats(uCfg) {
-            const lvl = state.units[uCfg.id];
-            const scale = Math.pow(1.22, lvl - 1);
+        /* ================= КАМЕРА И ИЗОМЕТРИЧЕСКАЯ МАТЕМАТИКА ================= */
+        const canvas = document.getElementById('world-canvas');
+        const ctx = canvas.getContext('2d');
+        let cw = 0, ch = 0;
 
-            let hp = uCfg.baseHp * scale;
-            let dmg = uCfg.baseDmg * scale;
-            let armor = Math.floor(uCfg.baseArmor + (lvl - 1) * (uCfg.isTank ? 3 : 1));
-            let crit = uCfg.crit + state.tech.dmg3 * 5;
+        let cam = {
+            x: 0,
+            y: 0,
+            zoom: 1.0
+        };
 
-            if (uCfg.isTank) {
-                hp *= (1 + state.tech.hp2 * 0.10);
-                dmg *= (1 + (state.buildings.tankFactory - 1) * 0.10 + state.tech.dmg2 * 0.08);
-                armor += state.tech.hp2 * 3;
-            } else {
-                hp *= (1 + (state.buildings.barracks - 1) * 0.08 + state.tech.hp1 * 0.07);
-                dmg *= (1 + state.tech.dmg1 * 0.06);
-            }
+        function resizeCanvas() {
+            cw = canvas.width = window.innerWidth;
+            ch = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
-            const cdMult = Math.max(0.5, 1 - state.tech.eco2 * 0.06);
+        // Перевод координат сетки (gx, gy) в экранные координаты (до зума)
+        function gridToWorld(gx, gy) {
             return {
-                lvl,
-                hp: Math.round(hp),
-                dmg: Math.round(dmg),
-                armor,
-                crit,
-                cd: +(uCfg.skillCd * cdMult).toFixed(1)
+                x: (gx - gy) * (TILE_W * 0.5),
+                y: (gx + gy) * (TILE_H * 0.5)
             };
         }
 
-        function getTotalPower() {
-            let power = 0;
-            unitsConfig.forEach(u => {
-                const s = getUnitStats(u);
-                power += s.hp * 0.5 + s.dmg * 4 + s.armor * 10;
-            });
-            return Math.round(power);
+        // Перевод экранного клика в ячейку сетки (gx, gy)
+        function screenToGrid(sx, sy) {
+            const wx = (sx - cw * 0.5) / cam.zoom - cam.x;
+            const wy = (sy - ch * 0.45) / cam.zoom - cam.y;
+            const gx = Math.floor((wx / (TILE_W * 0.5) + wy / (TILE_H * 0.5)) * 0.5);
+            const gy = Math.floor((wy / (TILE_H * 0.5) - wx / (TILE_W * 0.5)) * 0.5);
+            return { gx, gy };
         }
 
-        // Оффлайн-добыча ресурсов за время отсутствия
-        const offlineSec = Math.min(3600 * 4, Math.max(0, (Date.now() - state.lastTick) / 1000));
-        if (offlineSec > 5) {
-            state.steel += getSteelRate() * offlineSec;
-            state.fuel += getFuelRate() * offlineSec;
+        function centerCamera() {
+            const center = gridToWorld(50, 50);
+            cam.x = -center.x;
+            cam.y = -center.y;
+        }
+        centerCamera();
+
+        function changeZoom(delta) {
+            cam.zoom = Math.max(0.45, Math.min(2.1, +(cam.zoom + delta).toFixed(2)));
         }
 
-        /* ================= РЕНДЕР ИНТЕРФЕЙСА ================= */
-        function updateTopBar() {
-            document.getElementById('res-steel').textContent = Math.floor(state.steel);
-            document.getElementById('res-fuel').textContent = Math.floor(state.fuel);
-            document.getElementById('res-science').textContent = Math.floor(state.science);
-            document.getElementById('rate-steel').textContent = `+${getSteelRate().toFixed(1)}/с`;
-            document.getElementById('rate-fuel').textContent = `+${getFuelRate().toFixed(1)}/с`;
-            document.getElementById('base-power').textContent = `Боевая мощь: ${getTotalPower()}`;
-        }
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            changeZoom(e.deltaY < 0 ? 0.12 : -0.12);
+        }, { passive: false });
 
-        function renderBase() {
-            const visualEl = document.getElementById('base-visual');
-            const listEl = document.getElementById('buildings-list');
-            visualEl.innerHTML = '';
-            listEl.innerHTML = '';
-
-            buildingsConfig.forEach(b => {
-                const lvl = state.buildings[b.id];
-                const cost = b.cost(lvl);
-                const hqLimit = !b.isHq && lvl >= state.buildings.hq;
-                const canAfford = state.steel >= cost.steel && state.fuel >= cost.fuel && !hqLimit;
-
-                // Мини-карта базы сверху
-                const plot = document.createElement('div');
-                plot.className = `b-plot ${b.isHq ? 'hq' : ''}`;
-                plot.innerHTML = `
-                    <div class="b-icon">${b.icon}</div>
-                    <div class="b-plot-name">${b.name}</div>
-                    <div class="b-plot-lvl">Ур. ${lvl}</div>
-                `;
-                plot.onclick = () => {
-                    document.getElementById(`b-card-${b.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                };
-                visualEl.appendChild(plot);
-
-                // Карточка улучшения здания
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.id = `b-card-${b.id}`;
-                card.innerHTML = `
-                    <div class="card-header">
-                        <div class="card-info">
-                            <div class="avatar">${b.icon}</div>
-                            <div>
-                                <div class="card-name">${b.name}</div>
-                                <div class="card-sub">${b.desc}</div>
-                                <div style="font-size:12px; color:var(--accent-green); font-weight:700; margin-top:2px;">${b.statLabel(lvl)}</div>
-                            </div>
-                        </div>
-                        <div class="lvl-badge">Ур. ${lvl}</div>
-                    </div>
-                    <button class="btn btn-upgrade" ${canAfford ? '' : 'disabled'} onclick="upgradeBuilding('${b.id}')">
-                        ${hqLimit ? `Требуется Штаб Ур. ${lvl + 1}` : `Улучшить: ⚙️ ${cost.steel} | 🛢️ ${cost.fuel}`}
-                    </button>
-                `;
-                listEl.appendChild(card);
-            });
-        }
-
-        function upgradeBuilding(id) {
-            const cfg = buildingsConfig.find(b => b.id === id);
-            const lvl = state.buildings[id];
-            if (!cfg.isHq && lvl >= state.buildings.hq) return;
-            const cost = cfg.cost(lvl);
-            if (state.steel >= cost.steel && state.fuel >= cost.fuel) {
-                state.steel -= cost.steel;
-                state.fuel -= cost.fuel;
-                state.buildings[id]++;
-                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-                saveGame();
-                refreshAll();
+        /* ================= ЛОГИКА ПРОВЕРКИ ЗАНЯТОСТИ ЯЧЕЕК ================= */
+        function canPlaceAt(gx, gy, w, h, ignoreUid = null) {
+            if (gx < 0 || gy < 0 || gx + w > MAP_SIZE || gy + h > MAP_SIZE) return false;
+            for (const ent of gameState.entities) {
+                if (ent.uid === ignoreUid) continue;
+                const cfg = CATALOG[ent.type];
+                const overlap = !(
+                    gx + w <= ent.gx ||
+                    gx >= ent.gx + cfg.w ||
+                    gy + h <= ent.gy ||
+                    gy >= ent.gy + cfg.h
+                );
+                if (overlap) return false;
             }
+            return true;
         }
 
-        function renderSquad() {
-            const listEl = document.getElementById('units-list');
-            listEl.innerHTML = '';
-
-            unitsConfig.forEach(u => {
-                const s = getUnitStats(u);
-                const cost = u.cost(s.lvl);
-                const hqLimit = s.lvl >= state.buildings.hq * 2;
-                const canAfford = state.steel >= cost.steel && state.fuel >= cost.fuel && !hqLimit;
-
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <div class="card-header">
-                        <div class="card-info">
-                            <div class="avatar">${u.icon}</div>
-                            <div>
-                                <div class="card-name">${u.name}</div>
-                                <div class="card-sub">${u.role}</div>
-                            </div>
-                        </div>
-                        <div class="lvl-badge">Ур. ${s.lvl}</div>
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-item"><div class="stat-lbl">❤️ HP</div><div class="stat-val">${s.hp}</div></div>
-                        <div class="stat-item"><div class="stat-lbl">⚔️ УРОН</div><div class="stat-val">${s.dmg}</div></div>
-                        <div class="stat-item"><div class="stat-lbl">🛡️ БРОНЯ</div><div class="stat-val">${s.armor}</div></div>
-                        <div class="stat-item"><div class="stat-lbl">💥 КРИТ</div><div class="stat-val">${s.crit}%</div></div>
-                    </div>
-                    <div class="skill-desc">
-                        <b>Умение «${u.skillName}» (${s.cd}с):</b> ${u.skillDesc}
-                    </div>
-                    <button class="btn btn-upgrade" ${canAfford ? '' : 'disabled'} onclick="upgradeUnit('${u.id}')">
-                        ${hqLimit ? `Повысьте Штаб для прокачки` : `Повысить уровень: ⚙️ ${cost.steel} | 🛢️ ${cost.fuel}`}
-                    </button>
-                `;
-                listEl.appendChild(card);
-            });
-        }
-
-        function upgradeUnit(id) {
-            const cfg = unitsConfig.find(u => u.id === id);
-            const lvl = state.units[id];
-            if (lvl >= state.buildings.hq * 2) return;
-            const cost = cfg.cost(lvl);
-            if (state.steel >= cost.steel && state.fuel >= cost.fuel) {
-                state.steel -= cost.steel;
-                state.fuel -= cost.fuel;
-                state.units[id]++;
-                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-                saveGame();
-                refreshAll();
-            }
-        }
-
-        function renderTech() {
-            const listEl = document.getElementById('tech-list');
-            listEl.innerHTML = '';
-
-            techBranches.forEach(branch => {
-                const branchDiv = document.createElement('div');
-                branchDiv.className = 'tech-branch';
-                branchDiv.innerHTML = `<div class="tech-branch-title">${branch.title}</div>`;
-
-                branch.nodes.forEach(node => {
-                    const lvl = state.tech[node.id];
-                    const unlocked = !node.req || state.tech[node.req] >= 1;
-                    const isMax = lvl >= node.max;
-                    const sciCost = Math.floor(node.sci * Math.pow(1.5, lvl));
-                    const steelCost = Math.floor(node.steel * Math.pow(1.5, lvl));
-                    const canBuy = unlocked && !isMax && state.science >= sciCost && state.steel >= steelCost;
-
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    card.style.opacity = unlocked ? '1' : '0.55';
-                    card.innerHTML = `
-                        <div class="card-header">
-                            <div>
-                                <div class="card-name">${node.name}</div>
-                                <div class="card-sub">${node.desc}</div>
-                            </div>
-                            <div class="lvl-badge">${lvl} / ${node.max}</div>
-                        </div>
-                        <button class="btn btn-upgrade" ${canBuy ? '' : 'disabled'} onclick="upgradeTech('${node.id}', ${sciCost}, ${steelCost})">
-                            ${!unlocked ? '🔒 Изучите предыдущий навык' : (isMax ? '✅ Максимальный уровень' : `Изучить: 🧪 ${sciCost} | ⚙️ ${steelCost}`)}
-                        </button>
-                    `;
-                    branchDiv.appendChild(card);
-                });
-
-                listEl.appendChild(branchDiv);
-            });
-        }
-
-        function upgradeTech(id, sciCost, steelCost) {
-            if (state.science >= sciCost && state.steel >= steelCost) {
-                state.science -= sciCost;
-                state.steel -= steelCost;
-                state.tech[id]++;
-                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-                saveGame();
-                refreshAll();
-            }
-        }
-
-        function switchTab(tab, btnEl) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.getElementById(`screen-${tab}`).classList.add('active');
-            btnEl.classList.add('active');
-            if (tab === 'battle') updateMissionHeader();
-        }
-
-        function getMissionRewards(m) {
-            const mult = 1 + state.tech.eco3 * 0.15;
-            return {
-                steel: Math.round((130 + m * 55) * mult),
-                fuel: Math.round((65 + m * 30) * mult),
-                science: Math.round((20 + m * 10) * mult)
-            };
-        }
-
-        function updateMissionHeader() {
-            const m = state.mission;
-            const rew = getMissionRewards(m);
-            document.getElementById('mission-title').textContent = `Миссия ${m}: Рубеж обороны`;
-            document.getElementById('mission-reward').textContent = `Награда: ⚙️ ${rew.steel} | 🛢️ ${rew.fuel} | 🧪 ${rew.science}`;
-            renderSkillButtons();
-        }
-
-        /* ================= ТАКТИЧЕСКИЙ БОЙ НА CANVAS ================= */
-        const bCanvas = document.getElementById('battle-canvas');
-        const bCtx = bCanvas.getContext('2d');
-        let battleActive = false;
-        let allies = [];
-        let enemies = [];
-        let projectiles = [];
-        let explosions = [];
-        let floatingTexts = [];
-        let healTimer = 0;
-
-        function resizeBattleCanvas() {
-            bCanvas.width = bCanvas.clientWidth || 340;
-            bCanvas.height = 230;
-        }
-        window.addEventListener('resize', resizeBattleCanvas);
-        resizeBattleCanvas();
-
-        function startBattle() {
-            if (battleActive) return;
-            resizeBattleCanvas();
-            battleActive = true;
-            document.getElementById('btn-start-battle').disabled = true;
-            document.getElementById('battle-status').textContent = 'Идёт бой! Прожимайте умения бойцов и танка';
-            projectiles = [];
-            explosions = [];
-            floatingTexts = [];
-            healTimer = 0;
-
-            const w = bCanvas.width;
-            const h = bCanvas.height;
-
-            // Формируем отряд игрока слева
-            const allyPositions = [
-                { x: w * 0.24, y: h * 0.25 }, // Штурмовик
-                { x: w * 0.14, y: h * 0.45 }, // Снайпер
-                { x: w * 0.16, y: h * 0.72 }, // Гранатомётчик
-                { x: w * 0.30, y: h * 0.62 }  // Танк
-            ];
-
-            allies = unitsConfig.map((u, idx) => {
-                const st = getUnitStats(u);
-                return {
-                    id: u.id,
-                    name: u.name,
-                    icon: u.icon,
-                    isTank: u.isTank,
-                    x: allyPositions[idx].x,
-                    y: allyPositions[idx].y,
-                    hp: st.hp,
-                    maxHp: st.hp,
-                    dmg: st.dmg,
-                    armor: st.armor,
-                    crit: st.crit,
-                    atkTimer: 0.6 + idx * 0.35,
-                    atkInterval: u.isTank ? 2.1 : 1.35,
-                    skillName: u.skillName,
-                    skillCd: st.cd,
-                    skillTimer: st.cd * 0.35 // в начале боя умения заряжены на 65%
-                };
-            });
-
-            // Формируем врагов справа под номер миссии
-            const m = state.mission;
-            const scale = Math.pow(1.25, m - 1);
-            enemies = [
-                { name: 'Пехотинец', icon: '🔫', isTank: false, x: w * 0.76, y: h * 0.25, hp: Math.round(130 * scale), maxHp: Math.round(130 * scale), dmg: Math.round(15 * scale), armor: Math.floor(2 + m), atkTimer: 0.9, atkInterval: 1.45 },
-                { name: 'Пулемётчик', icon: '💣', isTank: false, x: w * 0.84, y: h * 0.48, hp: Math.round(170 * scale), maxHp: Math.round(170 * scale), dmg: Math.round(20 * scale), armor: Math.floor(4 + m), atkTimer: 1.2, atkInterval: 1.6 },
-                { name: 'Бронемашина', icon: '🚙', isTank: true, x: w * 0.73, y: h * 0.72, hp: Math.round(320 * scale), maxHp: Math.round(320 * scale), dmg: Math.round(30 * scale), armor: Math.floor(8 + m * 1.5), atkTimer: 1.5, atkInterval: 2.1 }
-            ];
-
-            renderSkillButtons();
-        }
-
-        function renderSkillButtons() {
-            const bar = document.getElementById('skills-bar');
-            bar.innerHTML = '';
-
-            unitsConfig.forEach((u, idx) => {
-                const ally = battleActive ? allies[idx] : null;
-                const alive = ally ? ally.hp > 0 : true;
-                const ready = battleActive && alive && ally.skillTimer <= 0;
-                const cdLeft = ally ? Math.max(0, ally.skillTimer).toFixed(1) : getUnitStats(u).cd;
-
-                const btn = document.createElement('button');
-                btn.className = `skill-btn ${ready ? 'ready' : ''}`;
-                btn.disabled = !ready;
-                btn.innerHTML = `
-                    <div class="skill-btn-top">
-                        <span>${u.icon} ${u.skillName}</span>
-                        <span>${!alive ? '💀' : (ready ? 'ГОТОВО' : cdLeft + 'с')}</span>
-                    </div>
-                    <div class="skill-btn-sub">${u.name}</div>
-                `;
-                btn.onclick = () => triggerSkill(idx);
-                bar.appendChild(btn);
-            });
-        }
-
-        function triggerSkill(idx) {
-            if (!battleActive) return;
-            const ally = allies[idx];
-            if (!ally || ally.hp <= 0 || ally.skillTimer > 0) return;
-
-            const livingEnemies = enemies.filter(e => e.hp > 0);
-            if (livingEnemies.length === 0) return;
-
-            ally.skillTimer = ally.skillCd;
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
-
-            if (ally.id === 'assault') {
-                const target = livingEnemies[0];
-                dealDamage(ally, target, ally.dmg * 2.2, false, '#38bdf8');
-            } else if (ally.id === 'sniper') {
-                const target = livingEnemies[livingEnemies.length - 1];
-                dealDamage(ally, target, ally.dmg * 3.0, true, '#f59e0b');
-            } else if (ally.id === 'grenadier') {
-                livingEnemies.forEach(t => dealDamage(ally, t, ally.dmg * 1.4, false, '#22c55e'));
-            } else if (ally.id === 'tank') {
-                livingEnemies.forEach(t => dealDamage(ally, t, ally.dmg * 1.9, false, '#ef4444'));
-            }
-            renderSkillButtons();
-        }
-
-        function dealDamage(attacker, target, rawDmg, ignoreArmor = false, color = '#fbbf24') {
-            if (target.hp <= 0) return;
-            const isCrit = attacker.crit && Math.random() * 100 < attacker.crit;
-            let dmg = rawDmg * (isCrit ? 1.5 : 1);
-            if (!ignoreArmor) {
-                dmg = Math.max(dmg * 0.25, dmg - target.armor);
-            }
-            const finalDmg = Math.round(dmg);
-            target.hp = Math.max(0, target.hp - finalDmg);
-
-            projectiles.push({
-                x: attacker.x, y: attacker.y,
-                tx: target.x, ty: target.y,
-                progress: 0,
-                color: color,
-                big: attacker.isTank
-            });
-
-            floatingTexts.push({
-                x: target.x + (Math.random() - 0.5) * 16,
-                y: target.y - 18,
-                text: `${isCrit ? '💥' : ''}-${finalDmg}`,
-                color: isCrit ? '#f59e0b' : '#ffffff',
-                life: 1.0
-            });
-        }
-
-        function finishBattle(victory) {
-            battleActive = false;
-            document.getElementById('btn-start-battle').disabled = false;
-            const modal = document.getElementById('battle-modal');
-
-            if (victory) {
-                const rew = getMissionRewards(state.mission);
-                state.steel += rew.steel;
-                state.fuel += rew.fuel;
-                state.science += rew.science;
-                state.mission++;
-                document.getElementById('modal-icon').textContent = '🏆';
-                document.getElementById('modal-title').textContent = 'Сектор захвачен!';
-                document.getElementById('modal-desc').textContent = `Трофеи: ⚙️ +${rew.steel}, 🛢️ +${rew.fuel}, 🧪 +${rew.science}`;
-                document.getElementById('battle-status').textContent = 'Победа! Готово к следующему штурму';
-                if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            } else {
-                document.getElementById('modal-icon').textContent = '💥';
-                document.getElementById('modal-title').textContent = 'Отряд отступил';
-                document.getElementById('modal-desc').textContent = 'Улучшите бойцов, танк или ветку умений на базе и повторите атаку.';
-                document.getElementById('battle-status').textContent = 'Требуется усиление отряда';
-                if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
-            }
-
-            saveGame();
-            refreshAll();
-            modal.style.display = 'flex';
-        }
-
-        function closeBattleModal() {
-            document.getElementById('battle-modal').style.display = 'none';
-        }
-
-        /* ================= ИГРОВОЙ ЦИКЛ (РЕСУРСЫ + АНИМАЦИЯ БОЯ) ================= */
-        let lastTime = performance.now();
-        let saveCounter = 0;
-
-        function gameLoop(now) {
-            const dt = Math.min((now - lastTime) / 1000, 0.1);
-            lastTime = now;
-
-            // Пассивный прирост ресурсов
-            state.steel += getSteelRate() * dt;
-            state.fuel += getFuelRate() * dt;
-            updateTopBar();
-
-            saveCounter += dt;
-            if (saveCounter >= 5) {
-                saveCounter = 0;
-                saveGame();
-            }
-
-            // Логика и отрисовка поля боя
-            drawBattleScene(dt);
-            requestAnimationFrame(gameLoop);
-        }
-
-        function drawBattleScene(dt) {
-            const w = bCanvas.width;
-            const h = bCanvas.height;
-
-            // Фон поля боя (тактическая земля и окопы)
-            bCtx.fillStyle = '#18211b';
-            bCtx.fillRect(0, 0, w, h);
-
-            bCtx.strokeStyle = 'rgba(255,255,255,0.05)';
-            bCtx.lineWidth = 1;
-            for (let gx = 0; gx < w; gx += 32) {
-                bCtx.beginPath(); bCtx.moveTo(gx, 0); bCtx.lineTo(gx, h); bCtx.stroke();
-            }
-            for (let gy = 0; gy < h; gy += 32) {
-                bCtx.beginPath(); bCtx.moveTo(0, gy); bCtx.lineTo(w, gy); bCtx.stroke();
-            }
-
-            // Линия фронта по центру
-            bCtx.strokeStyle = 'rgba(239, 68, 68, 0.28)';
-            bCtx.setLineDash([6, 6]);
-            bCtx.beginPath();
-            bCtx.moveTo(w * 0.5, 10);
-            bCtx.lineTo(w * 0.5, h - 10);
-            bCtx.stroke();
-            bCtx.setLineDash([]);
-
-            if (battleActive) {
-                // Полевой госпиталь из ветки науки
-                if (state.tech.hp3 > 0) {
-                    healTimer += dt;
-                    if (healTimer >= 8) {
-                        healTimer = 0;
-                        allies.forEach(a => {
-                            if (a.hp > 0) {
-                                const heal = Math.round(a.maxHp * 0.08 * state.tech.hp3);
-                                a.hp = Math.min(a.maxHp, a.hp + heal);
-                                floatingTexts.push({ x: a.x, y: a.y - 20, text: `+${heal}`, color: '#22c55e', life: 1.0 });
-                            }
-                        });
-                    }
+        function getEntityAt(gx, gy) {
+            for (let i = gameState.entities.length - 1; i >= 0; i--) {
+                const ent = gameState.entities[i];
+                const cfg = CATALOG[ent.type];
+                if (gx >= ent.gx && gx < ent.gx + cfg.w && gy >= ent.gy && gy < ent.gy + cfg.h) {
+                    return ent;
                 }
+            }
+            return null;
+        }
 
-                // Ходы союзников
-                let skillBarNeedsUpdate = false;
-                allies.forEach(a => {
-                    if (a.hp <= 0) return;
-                    if (a.skillTimer > 0) {
-                        a.skillTimer = Math.max(0, a.skillTimer - dt);
-                        skillBarNeedsUpdate = true;
+        function hasBuilding(type) {
+            return gameState.entities.some(e => e.type === type);
+        }
+
+        function countType(type) {
+            return gameState.entities.filter(e => e.type === type).length;
+        }
+
+        function getEntityStats(ent) {
+            const cfg = CATALOG[ent.type];
+            const mult = Math.pow(1.25, ent.lvl - 1);
+            return {
+                hp: Math.round(cfg.baseHp * mult),
+                dmg: Math.round(cfg.baseDmg * mult),
+                armor: Math.round(cfg.baseArmor + (ent.lvl - 1) * 3),
+                income: +(cfg.income * Math.pow(1.35, ent.lvl - 1)).toFixed(1),
+                upgCost: Math.round(cfg.cost * Math.pow(1.6, ent.lvl))
+            };
+        }
+
+        function getTotalIncome() {
+            let inc = 0;
+            for (const ent of gameState.entities) {
+                inc += getEntityStats(ent).income;
+            }
+            return inc;
+        }
+
+        /* ================= ПЕРЕТАСКИВАНИЕ ИЗ ПАНЕЛИ И ПО КАРТЕ ================= */
+        let currentDockTab = 'buildings';
+        let dragGhostState = null; // { mode: 'new'|'move', type, uid, gx, gy }
+        let selectedEntityUid = null;
+
+        let isPanning = false;
+        let panStart = { x: 0, y: 0 };
+        let camStart = { x: 0, y: 0 };
+        let pointerDownPos = { x: 0, y: 0 };
+
+        function setDockTab(tab, btn) {
+            currentDockTab = tab;
+            document.querySelectorAll('.d-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderDock();
+        }
+
+        function renderDock() {
+            const strip = document.getElementById('build-strip');
+            strip.innerHTML = '';
+
+            const hqBuilt = hasBuilding('hq');
+
+            Object.values(CATALOG).filter(item => item.tab === currentDockTab).forEach(item => {
+                const count = countType(item.id);
+                let lockedReason = '';
+                if (item.id !== 'hq' && !hqBuilt) lockedReason = 'Нужен Штаб';
+                else if (item.reqBuilding && !hasBuilding(item.reqBuilding)) lockedReason = `Нужна ${CATALOG[item.reqBuilding].name}`;
+                else if (count >= item.maxCount) lockedReason = 'Макс.';
+
+                const canAfford = gameState.coins >= item.cost && !lockedReason;
+
+                const card = document.createElement('div');
+                card.className = `build-item ${lockedReason ? 'locked' : ''}`;
+                card.innerHTML = `
+                    <div class="bi-top">
+                        <span>${item.w}×${item.h}</span>
+                        <span>${count}/${item.maxCount}</span>
+                    </div>
+                    <div class="bi-icon">${item.icon}</div>
+                    <div class="bi-name">${item.name}</div>
+                    <div class="bi-cost">${lockedReason ? lockedReason : '🪙 ' + item.cost}</div>
+                `;
+
+                card.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    if (lockedReason) {
+                        showTempBanner(`🔒 Сначала построй: ${lockedReason}`);
+                        return;
                     }
-                    a.atkTimer -= dt;
-                    if (a.atkTimer <= 0) {
-                        a.atkTimer = a.atkInterval;
-                        const target = enemies.find(e => e.hp > 0);
-                        if (target) dealDamage(a, target, a.dmg, false, a.isTank ? '#f59e0b' : '#38bdf8');
+                    if (!canAfford) {
+                        showTempBanner(`❌ Недостаточно Коинов (нужно ${item.cost})`);
+                        return;
                     }
+                    closeInspector();
+                    const cell = screenToGrid(e.clientX, e.clientY - 70);
+                    dragGhostState = {
+                        mode: 'new',
+                        type: item.id,
+                        uid: null,
+                        gx: Math.max(0, Math.min(MAP_SIZE - item.w, cell.gx)),
+                        gy: Math.max(0, Math.min(MAP_SIZE - item.h, cell.gy))
+                    };
+                    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
                 });
-                if (skillBarNeedsUpdate) renderSkillButtons();
 
-                // Ходы врагов
-                enemies.forEach(e => {
-                    if (e.hp <= 0) return;
-                    e.atkTimer -= dt;
-                    if (e.atkTimer <= 0) {
-                        e.atkTimer = e.atkInterval;
-                        const livingAllies = allies.filter(a => a.hp > 0);
-                        if (livingAllies.length > 0) {
-                            // Танк притягивает больше внимания врагов
-                            const tank = livingAllies.find(a => a.isTank);
-                            const target = (tank && Math.random() < 0.55) ? tank : livingAllies[Math.floor(Math.random() * livingAllies.length)];
-                            dealDamage(e, target, e.dmg, false, '#ef4444');
+                strip.appendChild(card);
+            });
+        }
+
+        window.addEventListener('pointermove', (e) => {
+            if (dragGhostState) {
+                const cfg = CATALOG[dragGhostState.type];
+                const cell = screenToGrid(e.clientX, e.clientY - 60);
+                dragGhostState.gx = Math.max(0, Math.min(MAP_SIZE - cfg.w, cell.gx - Math.floor(cfg.w / 2)));
+                dragGhostState.gy = Math.max(0, Math.min(MAP_SIZE - cfg.h, cell.gy - Math.floor(cfg.h / 2)));
+                return;
+            }
+
+            if (isPanning) {
+                const dx = (e.clientX - panStart.x) / cam.zoom;
+                const dy = (e.clientY - panStart.y) / cam.zoom;
+                cam.x = camStart.x + dx;
+                cam.y = camStart.y + dy;
+
+                const centerCell = screenToGrid(cw * 0.5, ch * 0.45);
+                const cx = Math.max(0, Math.min(99, centerCell.gx));
+                const cy = Math.max(0, Math.min(99, centerCell.gy));
+                document.getElementById('coords-display').textContent = `Центр: ${cx}, ${cy}`;
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (dragGhostState) {
+                const cfg = CATALOG[dragGhostState.type];
+                const valid = canPlaceAt(dragGhostState.gx, dragGhostState.gy, cfg.w, cfg.h, dragGhostState.uid);
+
+                if (valid) {
+                    if (dragGhostState.mode === 'new' && gameState.coins >= cfg.cost) {
+                        gameState.coins -= cfg.cost;
+                        const newEnt = {
+                            uid: gameState.nextUid++,
+                            type: cfg.id,
+                            gx: dragGhostState.gx,
+                            gy: dragGhostState.gy,
+                            lvl: 1
+                        };
+                        gameState.entities.push(newEnt);
+                        selectedEntityUid = newEnt.uid;
+                        openInspector(newEnt);
+                        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                    } else if (dragGhostState.mode === 'move') {
+                        const ent = gameState.entities.find(x => x.uid === dragGhostState.uid);
+                        if (ent) {
+                            ent.gx = dragGhostState.gx;
+                            ent.gy = dragGhostState.gy;
+                            openInspector(ent);
+                            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
                         }
                     }
-                });
-
-                // Проверка окончания боя
-                if (enemies.every(e => e.hp <= 0)) {
-                    finishBattle(true);
-                } else if (allies.every(a => a.hp <= 0)) {
-                    finishBattle(false);
+                    saveState();
+                    renderDock();
+                    updateHint();
+                } else {
+                    showTempBanner('⚠️ Место занято или за пределами карты 100×100');
+                    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
                 }
+
+                dragGhostState = null;
+                return;
             }
 
-            // Отрисовка юнитов
-            const drawUnit = (u, isAlly) => {
-                if (u.hp <= 0) return;
-                // Подставка под юнитом
-                bCtx.fillStyle = isAlly ? 'rgba(56, 189, 248, 0.25)' : 'rgba(239, 68, 68, 0.25)';
-                bCtx.beginPath();
-                bCtx.ellipse(u.x, u.y + 14, u.isTank ? 24 : 16, 7, 0, 0, Math.PI * 2);
-                bCtx.fill();
+            if (isPanning) {
+                isPanning = false;
+                const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+                if (moveDist < 7) {
+                    // Клик по ячейке карты
+                    const cell = screenToGrid(e.clientX, e.clientY);
+                    const clickedEnt = getEntityAt(cell.gx, cell.gy);
+                    if (clickedEnt) {
+                        selectedEntityUid = clickedEnt.uid;
+                        openInspector(clickedEnt);
+                        if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+                    } else {
+                        selectedEntityUid = null;
+                        closeInspector();
+                    }
+                }
+            }
+        });
 
-                // Иконка бойца/танка
-                bCtx.font = u.isTank ? '28px Arial' : '22px Arial';
-                bCtx.textAlign = 'center';
-                bCtx.textBaseline = 'middle';
-                bCtx.fillText(u.icon, u.x, u.y);
+        canvas.addEventListener('pointerdown', (e) => {
+            if (dragGhostState) return;
+            isPanning = true;
+            pointerDownPos = { x: e.clientX, y: e.clientY };
+            panStart = { x: e.clientX, y: e.clientY };
+            camStart = { x: cam.x, y: cam.y };
+        });
 
-                // Полоска HP
-                const barW = u.isTank ? 44 : 32;
-                const barH = 5;
-                const pct = Math.max(0, u.hp / u.maxHp);
-                bCtx.fillStyle = '#0f172a';
-                bCtx.fillRect(u.x - barW / 2, u.y - 22, barW, barH);
-                bCtx.fillStyle = isAlly ? '#22c55e' : '#ef4444';
-                bCtx.fillRect(u.x - barW / 2, u.y - 22, barW * pct, barH);
-            };
+        /* ================= ИНСПЕКТОР ОБЪЕКТА И ПРОКАЧКА ================= */
+        function openInspector(ent) {
+            const cfg = CATALOG[ent.type];
+            const st = getEntityStats(ent);
+            const panel = document.getElementById('inspector-panel');
+            panel.style.display = 'flex';
 
-            if (allies.length === 0) {
-                // Превью отряда до начала атаки
-                unitsConfig.forEach((u, i) => {
-                    drawUnit({ icon: u.icon, isTank: u.isTank, x: w * (i === 3 ? 0.3 : 0.18), y: 45 + i * 46, hp: 1, maxHp: 1 }, true);
-                });
+            document.getElementById('insp-name').textContent = `${cfg.icon} ${cfg.name} (Ур. ${ent.lvl})`;
+            document.getElementById('insp-size').textContent = `${cfg.w}×${cfg.h} яч. [${ent.gx}, ${ent.gy}]`;
+            document.getElementById('insp-desc').textContent = cfg.desc;
+
+            const statsEl = document.getElementById('insp-stats');
+            statsEl.innerHTML = `
+                <div><div class="st-lbl">❤️ HP</div><div class="st-val">${st.hp}</div></div>
+                <div><div class="st-lbl">⚔️ УРОН</div><div class="st-val">${st.dmg}</div></div>
+                <div><div class="st-lbl">🛡️ БРОНЯ</div><div class="st-val">${st.armor}</div></div>
+                <div><div class="st-lbl">🪙 ДОХОД</div><div class="st-val">+${st.income}/с</div></div>
+            `;
+
+            const upgBtn = document.getElementById('insp-upg-btn');
+            const hq = gameState.entities.find(e => e.type === 'hq');
+            const maxLvlByHq = ent.type === 'hq' ? 10 : (hq ? hq.lvl * 2 : 1);
+
+            if (ent.lvl >= maxLvlByHq) {
+                upgBtn.disabled = true;
+                upgBtn.textContent = `Улучшите Штаб`;
             } else {
-                allies.forEach(a => drawUnit(a, true));
-                enemies.forEach(e => drawUnit(e, false));
-            }
-
-            // Отрисовка снарядов и трассеров
-            for (let i = projectiles.length - 1; i >= 0; i--) {
-                const p = projectiles[i];
-                p.progress += dt * 5.5;
-                if (p.progress >= 1) {
-                    explosions.push({ x: p.tx, y: p.ty, r: p.big ? 22 : 12, life: 1.0, color: p.color });
-                    projectiles.splice(i, 1);
-                    continue;
-                }
-                const cx = p.x + (p.tx - p.x) * p.progress;
-                const cy = p.y + (p.ty - p.y) * p.progress;
-                bCtx.fillStyle = p.color;
-                bCtx.beginPath();
-                bCtx.arc(cx, cy, p.big ? 5 : 3, 0, Math.PI * 2);
-                bCtx.fill();
-            }
-
-            // Отрисовка взрывов
-            for (let i = explosions.length - 1; i >= 0; i--) {
-                const ex = explosions[i];
-                ex.life -= dt * 3.5;
-                if (ex.life <= 0) {
-                    explosions.splice(i, 1);
-                    continue;
-                }
-                bCtx.globalAlpha = ex.life;
-                bCtx.fillStyle = ex.color;
-                bCtx.beginPath();
-                bCtx.arc(ex.x, ex.y, ex.r * (1.3 - ex.life * 0.5), 0, Math.PI * 2);
-                bCtx.fill();
-                bCtx.globalAlpha = 1;
-            }
-
-            // Всплывающий урон
-            for (let i = floatingTexts.length - 1; i >= 0; i--) {
-                const ft = floatingTexts[i];
-                ft.y -= dt * 26;
-                ft.life -= dt * 1.2;
-                if (ft.life <= 0) {
-                    floatingTexts.splice(i, 1);
-                    continue;
-                }
-                bCtx.globalAlpha = ft.life;
-                bCtx.font = 'bold 12px Segoe UI';
-                bCtx.fillStyle = ft.color;
-                bCtx.fillText(ft.text, ft.x, ft.y);
-                bCtx.globalAlpha = 1;
+                upgBtn.disabled = gameState.coins < st.upgCost;
+                upgBtn.textContent = `Улучшить (🪙 ${st.upgCost})`;
             }
         }
 
-        function refreshAll() {
-            updateTopBar();
-            renderBase();
-            renderSquad();
-            renderTech();
-            updateMissionHeader();
+        function closeInspector() {
+            document.getElementById('inspector-panel').style.display = 'none';
+            selectedEntityUid = null;
         }
 
-        refreshAll();
-        requestAnimationFrame(gameLoop);
+        function upgradeSelected() {
+            const ent = gameState.entities.find(e => e.uid === selectedEntityUid);
+            if (!ent) return;
+            const st = getEntityStats(ent);
+            if (gameState.coins >= st.upgCost) {
+                gameState.coins -= st.upgCost;
+                ent.lvl++;
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                saveState();
+                openInspector(ent);
+                renderDock();
+            }
+        }
+
+        function startMovingSelected() {
+            const ent = gameState.entities.find(e => e.uid === selectedEntityUid);
+            if (!ent) return;
+            dragGhostState = {
+                mode: 'move',
+                type: ent.type,
+                uid: ent.uid,
+                gx: ent.gx,
+                gy: ent.gy
+            };
+            closeInspector();
+            showTempBanner('Перетяни объект на новое место на карте');
+        }
+
+        let bannerTimeout = null;
+        function showTempBanner(text) {
+            const el = document.getElementById('banner-hint');
+            el.textContent = text;
+            clearTimeout(bannerTimeout);
+            bannerTimeout = setTimeout(updateHint, 2800);
+        }
+
+        function updateHint() {
+            const el = document.getElementById('banner-hint');
+            if (!hasBuilding('hq')) {
+                el.textContent = 'Перетяни Штаб (3×3) из нижней панели на пустое поле';
+            } else if (!hasBuilding('barracks') && !hasBuilding('garage')) {
+                el.textContent = 'Построй Казарму или Автопарк (3×3), чтобы нанимать отряд';
+            } else {
+                el.textContent = 'Ставь пехоту (1×1) и машины (2×2) вокруг базы';
+            }
+        }
+
+        /* ================= 3D ИЗОМЕТРИЧЕСКАЯ ОТРИСОВКА КАРТЫ И ЮНИТОВ ================= */
+        function drawIsoDiamond(gx, gy, w, h, fill, stroke = null, lineWidth = 1) {
+            const p0 = gridToWorld(gx, gy);
+            const p1 = gridToWorld(gx + w, gy);
+            const p2 = gridToWorld(gx + w, gy + h);
+            const p3 = gridToWorld(gx, gy + h);
+
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p3.x, p3.y);
+            ctx.closePath();
+
+            if (fill) {
+                ctx.fillStyle = fill;
+                ctx.fill();
+            }
+            if (stroke) {
+                ctx.strokeStyle = stroke;
+                ctx.lineWidth = lineWidth;
+                ctx.stroke();
+            }
+        }
+
+        // Универсальный 3D-параллелепипед в изометрии
+        function drawIsoBox(gx, gy, w, h, zHeight, colorTop, colorLeft, colorRight) {
+            const p0 = gridToWorld(gx, gy);
+            const p1 = gridToWorld(gx + w, gy);
+            const p2 = gridToWorld(gx + w, gy + h);
+            const p3 = gridToWorld(gx, gy + h);
+
+            // Левая грань
+            ctx.beginPath();
+            ctx.moveTo(p3.x, p3.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p2.x, p2.y - zHeight);
+            ctx.lineTo(p3.x, p3.y - zHeight);
+            ctx.closePath();
+            ctx.fillStyle = colorLeft;
+            ctx.fill();
+
+            // Правая грань
+            ctx.beginPath();
+            ctx.moveTo(p2.x, p2.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.lineTo(p1.x, p1.y - zHeight);
+            ctx.lineTo(p2.x, p2.y - zHeight);
+            ctx.closePath();
+            ctx.fillStyle = colorRight;
+            ctx.fill();
+
+            // Крыша
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y - zHeight);
+            ctx.lineTo(p1.x, p1.y - zHeight);
+            ctx.lineTo(p2.x, p2.y - zHeight);
+            ctx.lineTo(p3.x, p3.y - zHeight);
+            ctx.closePath();
+            ctx.fillStyle = colorTop;
+            ctx.fill();
+        }
+
+        function draw3DEntity(ent, isGhost = false, isValid = true) {
+            const cfg = CATALOG[ent.type];
+            const { gx, gy } = ent;
+            const w = cfg.w;
+            const h = cfg.h;
+
+            ctx.save();
+            if (isGhost) {
+                ctx.globalAlpha = 0.78;
+                drawIsoDiamond(gx, gy, w, h, isValid ? 'rgba(74, 222, 128, 0.35)' : 'rgba(248, 113, 113, 0.45)', isValid ? '#4ade80' : '#f87171', 2.5);
+            } else if (ent.uid === selectedEntityUid) {
+                drawIsoDiamond(gx, gy, w, h, 'rgba(251, 191, 36, 0.25)', '#fbbf24', 2.5);
+            }
+
+            const center = gridToWorld(gx + w * 0.5, gy + h * 0.5);
+
+            if (ent.type === 'hq') {
+                // Бетонная площадка 3x3
+                drawIsoDiamond(gx + 0.1, gy + 0.1, 2.8, 2.8, '#9ca3af', '#4b5563', 1.5);
+                // Основной командный бункер
+                drawIsoBox(gx + 0.4, gy + 0.4, 2.1, 2.0, 34, '#a38f68', '#786646', '#5c4d33');
+                // Камуфляжные пятна на крыше
+                drawIsoBox(gx + 0.6, gy + 0.7, 0.7, 0.6, 35, '#4d5d36', '#4d5d36', '#4d5d36');
+                drawIsoBox(gx + 1.5, gy + 1.3, 0.8, 0.7, 35, '#4d5d36', '#4d5d36', '#4d5d36');
+                // Надстройка связи и антенна
+                drawIsoBox(gx + 0.8, gy + 0.8, 0.8, 0.8, 46, '#64748b', '#475569', '#334155');
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(center.x, center.y - 46);
+                ctx.lineTo(center.x, center.y - 76);
+                ctx.stroke();
+                // Синий флаг как на скриншоте
+                ctx.fillStyle = '#1d4ed8';
+                ctx.fillRect(center.x, center.y - 75, 16, 10);
+            } else if (ent.type === 'barracks') {
+                // Песчано-бетонная площадка и заборчик
+                drawIsoDiamond(gx + 0.15, gy + 0.15, 2.7, 2.7, '#d6c79c', '#94a3b8', 1.5);
+                // Камуфляжный ангар-палатка
+                drawIsoBox(gx + 0.45, gy + 0.5, 2.1, 1.9, 28, '#9c865c', '#6e5d3d', '#52442b');
+                drawIsoBox(gx + 0.65, gy + 0.7, 1.7, 1.5, 34, '#556b2f', '#3f5221', '#2e3b17');
+                // Флагшток
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(center.x - 18, center.y - 10);
+                ctx.lineTo(center.x - 18, center.y - 44);
+                ctx.stroke();
+                ctx.fillStyle = '#2563eb';
+                ctx.fillRect(center.x - 18, center.y - 43, 13, 8);
+            } else if (ent.type === 'garage') {
+                // Бетонная плита автопарка
+                drawIsoDiamond(gx + 0.1, gy + 0.1, 2.8, 2.8, '#64748b', '#334155', 1.5);
+                // Корпус цеха
+                drawIsoBox(gx + 0.35, gy + 0.4, 2.2, 2.1, 32, '#cbd5e1', '#94a3b8', '#64748b');
+                // Жёлтый кран / манипулятор сверху
+                drawIsoBox(gx + 1.0, gy + 1.0, 0.9, 0.9, 44, '#eab308', '#ca8a04', '#a16207');
+            } else if (ent.type === 'oilRig') {
+                // Площадка вышки
+                drawIsoDiamond(gx + 0.2, gy + 0.2, 2.6, 2.6, '#475569', '#1e293b', 1.5);
+                // Резервуары с топливом
+                drawIsoBox(gx + 0.4, gy + 1.6, 0.9, 0.9, 14, '#334155', '#1e293b', '#0f172a');
+                // Стальная решётчатая башня
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(center.x - 12, center.y);
+                ctx.lineTo(center.x, center.y - 62);
+                ctx.lineTo(center.x + 12, center.y);
+                ctx.moveTo(center.x - 8, center.y - 20);
+                ctx.lineTo(center.x + 8, center.y - 20);
+                ctx.moveTo(center.x - 4, center.y - 40);
+                ctx.lineTo(center.x + 4, center.y - 40);
+                ctx.stroke();
+            } else if (ent.type === 'soldier' || ent.type === 'sniper') {
+                // Тень бойца 1x1
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                ctx.beginPath();
+                ctx.ellipse(center.x, center.y + 2, 10, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Тело в камуфляже
+                drawIsoBox(gx + 0.3, gy + 0.3, 0.4, 0.4, 15, ent.type === 'sniper' ? '#365314' : '#4d7c0f', '#3f6212', '#1a2e05');
+                // Каска / голова
+                ctx.fillStyle = ent.type === 'sniper' ? '#1e293b' : '#65a30d';
+                ctx.beginPath();
+                ctx.arc(center.x, center.y - 18, 5.5, 0, Math.PI * 2);
+                ctx.fill();
+                // Оружие
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(center.x, center.y - 12);
+                ctx.lineTo(center.x + (ent.type === 'sniper' ? 16 : 11), center.y - 9);
+                ctx.stroke();
+            } else if (ent.type === 'humvee') {
+                // Тень машины 2x2
+                drawIsoDiamond(gx + 0.25, gy + 0.25, 1.5, 1.5, 'rgba(0,0,0,0.32)');
+                // Бронекузов
+                drawIsoBox(gx + 0.3, gy + 0.4, 1.4, 1.1, 14, '#8c7a53', '#6b5c3d', '#4f432b');
+                // Кабина
+                drawIsoBox(gx + 0.5, gy + 0.5, 0.9, 0.9, 21, '#a39067', '#786847', '#594c32');
+                // Турель на крыше
+                drawIsoBox(gx + 0.8, gy + 0.8, 0.35, 0.35, 25, '#1e293b', '#0f172a', '#0f172a');
+            } else if (ent.type === 'artillery') {
+                // Тень САУ 2x2
+                drawIsoDiamond(gx + 0.2, gy + 0.2, 1.6, 1.6, 'rgba(0,0,0,0.35)');
+                // Гусеничная база
+                drawIsoBox(gx + 0.25, gy + 0.3, 1.5, 1.4, 13, '#57534e', '#44403c', '#292524');
+                // Бронированная башня
+                drawIsoBox(gx + 0.45, gy + 0.5, 1.1, 1.0, 24, '#9c865c', '#736140', '#54462d');
+                // Длинный ствол пушки
+                ctx.strokeStyle = '#292524';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(center.x, center.y - 20);
+                ctx.lineTo(center.x + 24, center.y - 30);
+                ctx.stroke();
+            }
+
+            // Плашка уровня над объектом
+            if (!isGhost) {
+                const topOffset = cfg.w === 3 ? 52 : (cfg.w === 2 ? 32 : 26);
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+                ctx.beginPath();
+                ctx.roundRect(center.x - 16, center.y - topOffset - 12, 32, 14, 5);
+                ctx.fill();
+                ctx.fillStyle = '#fbbf24';
+                ctx.font = 'bold 9.5px Segoe UI';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`Ур.${ent.lvl}`, center.x, center.y - topOffset - 5);
+            }
+
+            ctx.restore();
+        }
+
+        function renderWorld() {
+            ctx.fillStyle = '#5c7c29';
+            ctx.fillRect(0, 0, cw, ch);
+
+            ctx.save();
+            ctx.translate(cw * 0.5, ch * 0.45);
+            ctx.scale(cam.zoom, cam.zoom);
+            ctx.translate(cam.x, cam.y);
+
+            // 1. Базовая травяная платформа 100x100
+            drawIsoDiamond(0, 0, MAP_SIZE, MAP_SIZE, '#6a8e32', '#3f571b', 4);
+
+            // 2. Песчаные проплешины на земле (как на скриншотах Линии Огня)
+            sandPatches.forEach(p => {
+                drawIsoDiamond(p.gx, p.gy, p.rx, p.ry, 'rgba(218, 198, 134, 0.55)');
+            });
+
+            // 3. Оптимизированная отрисовка тактической сетки (рисуем только видимые ячейки)
+            const topLeft = screenToGrid(0, 0);
+            const bottomRight = screenToGrid(cw, ch);
+            const minG = Math.max(0, Math.min(topLeft.gx, bottomRight.gx) - 18);
+            const maxG = Math.min(MAP_SIZE, Math.max(topLeft.gx, bottomRight.gx) + 18);
+            const minY = Math.max(0, Math.min(topLeft.gy, bottomRight.gy) - 18);
+            const maxY = Math.min(MAP_SIZE, Math.max(topLeft.gy, bottomRight.gy) + 18);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.lineWidth = 1;
+            for (let gx = minG; gx <= maxG; gx++) {
+                const a = gridToWorld(gx, minY);
+                const b = gridToWorld(gx, maxY);
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            }
+            for (let gy = minY; gy <= maxY; gy++) {
+                const a = gridToWorld(minG, gy);
+                const b = gridToWorld(maxG, gy);
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            }
+
+            // 4. Сортировка объектов по глубине (gx + gy) для правильного 3D-перекрытия
+            const sortedEntities = [...gameState.entities].sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy));
+            sortedEntities.forEach(ent => {
+                if (dragGhostState && dragGhostState.mode === 'move' && dragGhostState.uid === ent.uid) return;
+                draw3DEntity(ent, false, true);
+            });
+
+            // 5. Призрак перетаскиваемого здания / юнита / авто
+            if (dragGhostState) {
+                const cfg = CATALOG[dragGhostState.type];
+                const valid = canPlaceAt(dragGhostState.gx, dragGhostState.gy, cfg.w, cfg.h, dragGhostState.uid);
+                draw3DEntity(
+                    { type: dragGhostState.type, gx: dragGhostState.gx, gy: dragGhostState.gy, lvl: 1 },
+                    true,
+                    valid
+                );
+            }
+
+            ctx.restore();
+        }
+
+        /* ================= ИГРОВОЙ ЦИКЛ ДОХОДА И РЕНДЕРА ================= */
+        let lastTick = performance.now();
+        let saveTimer = 0;
+
+        function loop(now) {
+            const dt = Math.min((now - lastTick) / 1000, 0.1);
+            lastTick = now;
+
+            const income = getTotalIncome();
+            gameState.coins += income * dt;
+
+            document.getElementById('coins-display').textContent = Math.floor(gameState.coins);
+            document.getElementById('income-display').textContent = `+${income.toFixed(1)}/с`;
+
+            saveTimer += dt;
+            if (saveTimer >= 5) {
+                saveTimer = 0;
+                saveState();
+            }
+
+            renderWorld();
+            requestAnimationFrame(loop);
+        }
+
+        renderDock();
+        updateHint();
+        requestAnimationFrame(loop);
     </script>
 </body>
 </html>
